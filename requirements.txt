@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+dotenv
+pydantic
+pytest
+langgraph
+langchain
+langchain_ollama
+typing
+requests

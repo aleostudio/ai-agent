@@ -1,0 +1,12 @@
+services:
+  app:
+    build: .
+    container_name: simple-ai-agent
+    ports:
+      - "${APP_PORT:-9201}:${APP_PORT:-9201}"
+    environment:
+      APP_HOST: "${APP_HOST}"
+      APP_PORT: "${APP_PORT}"
+    env_file:
+      - .env
+    restart: always
