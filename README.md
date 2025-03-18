@@ -126,7 +126,7 @@ To debug your Python microservice you need to:
             "args": [
                 "app.main:app",
                 "--host", "0.0.0.0",
-                "--port", "9100",
+                "--port", "9201",
                 "--reload"
             ],
             "envFile": "${workspaceFolder}/.env",
