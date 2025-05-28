@@ -1,29 +1,28 @@
 import requests
-from langchain_ollama import ChatOllama
-from langchain_core.runnables import RunnableLambda
+from typing import Any
 from langgraph.graph import StateGraph
-from app.core.config import settings
+from app.core.provider import ChatModel
 from app.core.logger import logger
-from app.model.simple_agent_state import SimpleAgentState
-import app.prompts as prompts
+from app.model.agent_state import AgentState
+from app.core.provider import extract_response_content
+from app.core.config import settings
 
-
-class SimpleAgent:
+class Agent:
 
     # Agent instance with LangGraph workflow
-    def __init__(self, model: ChatOllama):
+    def __init__(self, model: ChatModel):
         self.model = model
-        self.workflow = StateGraph(SimpleAgentState)
+        self.workflow = StateGraph(AgentState)
 
         # LangGraph state creation
-        self.workflow.add_node("SimpleAgentState", RunnableLambda(self.interact_with_model))
+        self.workflow.add_node("AgentState", self.interact_with_model)
         
         # Execution flow definition (handoff) if we have other agents to call
-        # self.workflow.add_node("SomeOtherAgent", RunnableLambda(self.some_other_agent))
-        # self.workflow.add_edge("SimpleAgentState", "SomeOtherAgent")
+        # self.workflow.add_node("SomeOtherAgent", self.some_other_agent)
+        # self.workflow.add_edge("AgentState", "SomeOtherAgent")
 
         # Start point and graph compilation
-        self.workflow.set_entry_point("SimpleAgentState")
+        self.workflow.set_entry_point("AgentState")
         self.graph = self.workflow.compile()
 
 
@@ -41,19 +40,21 @@ class SimpleAgent:
 
 
     # Agent's entrypoint function
-    def interact_with_model(self, state: SimpleAgentState) -> SimpleAgentState:
-        prompt = state["prompt"]
-        
-        response = self.model.invoke(prompt)
-        
-        state["ai_message"] = response
-        state["generated_text"] = response.content
+    def interact_with_model(self, state: AgentState) -> AgentState:
+        messages = [
+            {"role": "system", "content": settings.DEFAULT_SYSTEM_PROMPT},
+            {"role": "user", "content": state["prompt"]}
+        ]
+        response = self.model(messages)
 
+        # Response adapter depending by chosen provider
+        state["response"] = extract_response_content(response)
+        
         return state
 
 
     # Example to call another agent via API
-    def call_another_agent_api(self, state: SimpleAgentState) -> SimpleAgentState:
+    def call_another_agent_api(self, state: AgentState) -> AgentState:
 
         try:
             logger.info("Calling remote agent")

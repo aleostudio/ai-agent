@@ -1,6 +1,6 @@
 # Simple AI agent to chat with a LLM
 
-This agent will interact with an existing **Ollama** instance as a chatbot.
+This agent will interact with an existing **Ollama** instance as a chatbot, or through other providers like **OpenAI**, **Claude**, **Deepseek** or **Groq**.
 
 ## Configuration
 

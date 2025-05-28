@@ -1,10 +1,12 @@
-fastapi
-uvicorn
+anthropic
 dotenv
-pydantic
-pytest
+fastapi
 langgraph
 langchain
 langchain_ollama
-typing
+openai
+pydantic
+pytest
 requests
+typing
+uvicorn
