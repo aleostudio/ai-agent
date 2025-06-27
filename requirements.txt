@@ -6,5 +6,7 @@ pytest
 langgraph
 langchain
 langchain_ollama
+langchain-groq
+truststore
 typing
 requests

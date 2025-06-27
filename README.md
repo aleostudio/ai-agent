@@ -1,6 +1,6 @@
 # Simple AI agent to chat with a LLM
 
-This agent will interact with an existing **Ollama** instance as a chatbot.
+This agent will interact with an existing Ollama instance or other AI providers as a chatbot.
 
 ## Configuration
 
