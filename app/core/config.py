@@ -15,6 +15,9 @@ class Settings:
     # Logging
     DEBUG: bool = os.getenv("DEBUG", "False").lower() == "true"
 
+    # Short-term memory
+    MAX_MEMORY_MESSAGES: int = int(os.getenv("MAX_MEMORY_MESSAGES", 10))
+
     # Provider config
     PROVIDER: str = os.getenv("PROVIDER", "ollama")
     PROVIDER_BASE_URL: str = os.getenv("PROVIDER_BASE_URL", "http://localhost:11434")

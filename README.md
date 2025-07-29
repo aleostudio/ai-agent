@@ -1,6 +1,6 @@
 # Simple AI agent to chat with a LLM
 
-This agent will interact with an existing Ollama instance or other AI providers as a chatbot.
+This agent will interact with an existing Ollama instance or other AI providers as a chatbot, keeping short-term memory per user.
 
 ## Configuration
 
@@ -18,6 +18,14 @@ First, install dependencies with:
 
 ```bash
 pip install --no-cache-dir -r requirements.txt
+```
+
+If you prefer to use **uv**, create and activate your **venv** with:
+
+```bash
+uv venv
+source .venv/bin/activate
+uv pip install -r requirements.txt
 ```
 
 If you want to run the service through your local interpreter:
@@ -53,6 +61,7 @@ The response will be something like this payload:
 
 ```json
 {
+    "user_id": "3e12c65f-fa39-4a20-aa6a-e55a56133f07",
     "response": {
         "content": "I'd be happy to help you with questions and tasks. Here's a list of things you can ask me:\n\n**General Knowledge**\n\n* Ask me about history, science, technology, literature, art, music, or any other topic\n* Get information on countries, cities, landmarks, cultures, and more\n* I can provide definitions for words, phrases, and concepts\n\n**Language and Writing**\n\n* Ask me to write a story, poem, or script\n* Get grammar and spelling suggestions\n* Practice writing in different styles (e.g., persuasive, narrative, descriptive)\n* Learn vocabulary through word associations, synonyms, antonyms\n\n**Math and Calculations**\n\n* Solve math problems, from basic arithmetic to advanced calculus\n* Get explanations for mathematical concepts and formulas\n* Calculate percentages, ratios, and conversions\n\n**Conversational Dialogue**\n\n* Engage in a conversation on a topic of your choice\n* Role-play different scenarios (e.g., job interview, customer service)\n* Practice social skills, such as active listening and responding\n\n**Creative Tasks**\n\n* Generate ideas for creative projects (e.g., writing, art, music)\n* Collaborate on brainstorming exercises\n* Get feedback on drafts or works-in-progress\n\n**Jokes and Entertainment**\n\n* Share jokes or puns with me\n* Play simple games (e.g., 20 Questions, Hangman)\n* Listen to or generate humor-related content\n\n**Trivia and Quizzes**\n\n* Take a quiz on various subjects\n* Test your knowledge on specific topics\n* Get hints or explanations for tricky questions\n\nFeel free to get creative and ask me anything that's on your mind!",
         "additional_kwargs": {},
@@ -88,6 +97,43 @@ The response will be something like this payload:
     }
 }
 ```
+
+To keep **short-term memory**, add the `user_id` property returned from the first call (or pass your user_id in the first interaction to use it):
+
+```bash
+curl -XPOST "http://localhost:9201/interact" \
+--header "Content-Type: application/json" \
+--data '{
+    "prompt": "Excuse me, I forgot to tell you that my name is Alessandro!",
+    "user_id": "3e12c65f-fa39-4a20-aa6a-e55a56133f07"
+}'
+```
+
+---
+
+### Memory status
+
+To check memory status, you can run these payloads:
+
+**Check if there are active users with initialized memory:**
+
+```bash
+curl -XGET "http://localhost:9201/memory"
+```
+
+**Check memory status for given user:**
+
+```bash
+curl -XGET "http://localhost:9201/memory/3e12c65f-fa39-4a20-aa6a-e55a56133f07"
+```
+
+**Delete memory for given user:**
+
+```bash
+curl -XDELETE "http://localhost:9201/memory/3e12c65f-fa39-4a20-aa6a-e55a56133f07"
+```
+
+---
 
 ## Tests
 

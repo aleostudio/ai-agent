@@ -23,6 +23,7 @@ model = init_chat_model(
 # Init agent
 simple_agent = SimpleAgent(model)
 
+
 # API exposition
 @app.post("/interact")
 async def interact(request: SimpleAgentRequest):
@@ -31,13 +32,62 @@ async def interact(request: SimpleAgentRequest):
         if settings.RESPONSE_TYPE == "text":
             response_type = "generated_text"
 
-        response = simple_agent.interact(request.prompt)
-        logger.info(response["agent_response"]["prompt"])        
-        
-        return {"response": response['agent_response'][response_type]}
+        # Interact with agent
+        response = simple_agent.interact(request.prompt, request.user_id)
+        return {"user_id": response['user_id'], "response": response['agent_response'][response_type]}
 
     except Exception as e:
         raise HTTPException(status_code = 500, detail = str(e))
+
+
+# Active users with existing memory
+@app.get("/memory")
+async def get_active_users():
+    try:
+        users = simple_agent.get_active_users()
+        return {"total_users": len(users), "active_users": users}
+
+    except Exception as e:
+        logger.error(f"Error getting active users: {e}")
+        raise HTTPException(status_code = 500, detail = str(e))
+
+
+# Clear memory for given user
+@app.delete("/memory/{user_id}")
+async def clear_user_memory(user_id: str):
+    try:
+        success = simple_agent.clear_user_memory(user_id)
+        if success:
+            return {"message": f"Memory erased for user {user_id}"}
+        else:
+            return {"message": f"No memory found for user {user_id}"}
+
+    except Exception as e:
+        logger.error(f"Error clearing memory for user {user_id}: {e}")
+        raise HTTPException(status_code = 500, detail = str(e))
+
+
+# Get memory for given user
+@app.get("/memory/{user_id}")
+async def get_user_memory(user_id: str):
+    try:
+        return simple_agent.get_user_memory(user_id)
+
+    except Exception as e:
+        logger.error(f"Error getting memory for user {user_id}: {e}")
+        raise HTTPException(status_code = 500, detail = str(e))
+
+
+# Get memory stats
+@app.get("/memory/stats}")
+async def get_memory_stats():
+    try:
+        return simple_agent.get_memory_stats()
+
+    except Exception as e:
+        logger.error(f"Error getting memory stats: {e}")
+        raise HTTPException(status_code = 500, detail = str(e))
+
 
 # Health check API
 @app.get("/")
