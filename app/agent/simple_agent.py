@@ -18,7 +18,7 @@ class SimpleAgent:
         self.max_memory_messages = max_memory_messages
         self.user_memories: Dict[str, List[Dict[str, str]]] = {}
 
-        # Thread-safe storage per memoria utenti con timestamp
+        # Thread-safe storage
         self._memory_lock = threading.RLock()
 
         # LangGraph state creation
@@ -71,7 +71,7 @@ class SimpleAgent:
 
             # Thread-safe memory update
             with self._memory_lock:
-                if user_id in self.user_memories:  # Verifica che esista ancora
+                if user_id in self.user_memories:
                     self.user_memories[user_id]["messages"] = output["memory"]
                     self.user_memories[user_id]["last_access"] = datetime.now()
 
@@ -137,7 +137,7 @@ class SimpleAgent:
             logger.error(f"Error interacting with model for user {user_id}: {e}")
             state["generated_text"] = f"Error: {str(e)}"
             state["ai_message"] = None
-        
+
         return state
 
 
