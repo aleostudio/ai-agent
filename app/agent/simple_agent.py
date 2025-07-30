@@ -3,15 +3,17 @@ from langchain_ollama import ChatOllama
 from langgraph.graph import StateGraph
 from app.core.logger import logger
 from app.model.simple_agent_state import SimpleAgentState
-from app.memory.manager import MemoryManager
+from app.memory.short_term_memory_manager import ShortTermMemoryManager
+from app.memory.long_term_memory_manager import LongTermMemoryManager
 import app.prompts as prompts
 
 class SimpleAgent:
 
     # Agent instance with LangGraph workflow
-    def __init__(self, model: ChatOllama, memory_manager: MemoryManager):
+    def __init__(self, model: ChatOllama, short_memory: ShortTermMemoryManager, long_memory: LongTermMemoryManager):
         self.model = model
-        self.memory = memory_manager
+        self.short_memory = short_memory
+        self.long_memory = long_memory
 
         # LangGraph state creation
         self.workflow = StateGraph(SimpleAgentState)
@@ -31,14 +33,18 @@ class SimpleAgent:
         if not prompt or not prompt.strip():
             raise ValueError("Prompt cannot be empty")
 
-        # Generate new user id if empty
-        user_id = self.memory.get_or_create(user_id)
-        memory = self.memory.get_messages(user_id)
+        # Generate new user id if empty and retrieve memories
+        user_id = self.short_memory.get_or_create(user_id)
+        short_memory = self.short_memory.get_messages(user_id)
+        long_memory = self.long_memory.get_facts(user_id)
+
+        # Convert long term facts into structured system messages
+        context_messages = self.long_memory.format_facts_as_system_messages(long_memory)
 
         state = {
             "prompt": prompt.strip(),
             "user_id": user_id,
-            "memory": memory,
+            "memory": context_messages + short_memory,
             "ai_message": None,
             "generated_text": ""
         }
@@ -48,7 +54,7 @@ class SimpleAgent:
             output = self.graph.invoke(state)
 
             # Thread-safe memory update
-            self.memory.update_messages(user_id, output["memory"])
+            self.short_memory.update_messages(user_id, output["memory"])
 
             return {
                 "agent_response": output, 
@@ -75,8 +81,11 @@ class SimpleAgent:
             # Invoke model with all messages or prompt only if it is the first message
             response = self.model.invoke(messages if len(messages) > 1 else prompt)
             updated_memory = messages + [{"role": "assistant", "content": response.content}]
+
+            # Extract facts from prompt and save them in long-term memory
+            self.extract_and_store_facts(user_id, prompt)
             
-            state["memory"] = updated_memory[-self.memory.max_messages:]
+            state["memory"] = updated_memory[-self.short_memory.max_messages:]
             state["ai_message"] = response
             state["generated_text"] = response.content
 
@@ -86,6 +95,18 @@ class SimpleAgent:
             state["ai_message"] = None
 
         return state
+
+
+    def extract_and_store_facts(self, user_id: str, prompt: str):
+        prompt_lower = prompt.lower()
+
+        if "mi chiamo" in prompt_lower:
+            name = prompt_lower.split("mi chiamo")[-1].strip().split()[0]
+            self.long_memory.add_fact(user_id, "names", name)
+
+        if "mio figlio si chiama" in prompt_lower:
+            name = prompt_lower.split("mio figlio si chiama")[-1].strip().split()[0]
+            self.long_memory.add_fact(user_id, "children", name)
 
 
     # Example to call another agent via API

@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from app.core.config import settings
 from typing import Dict, List, Optional
 
-class MemoryManager:
+class ShortTermMemoryManager:
 
     def __init__(self, max_messages: int = settings.MAX_MEMORY_MESSAGES, max_users: int = 100, max_age_hours: int = 24):
         self.max_messages = max_messages

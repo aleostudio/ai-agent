@@ -2,7 +2,8 @@ from fastapi import FastAPI, HTTPException
 from app.core.config import settings
 from app.core.logger import logger
 from app.agent.simple_agent import SimpleAgent
-from app.memory.manager import MemoryManager
+from app.memory.short_term_memory_manager import ShortTermMemoryManager
+from app.memory.long_term_memory_manager import LongTermMemoryManager
 from app.model.simple_agent_request import SimpleAgentRequest
 from langchain.chat_models import init_chat_model
 
@@ -22,7 +23,7 @@ model = init_chat_model(
 )
 
 # Init agent
-simple_agent = SimpleAgent(model, MemoryManager())
+simple_agent = SimpleAgent(model, ShortTermMemoryManager(), LongTermMemoryManager())
 
 
 # API exposition
@@ -45,7 +46,7 @@ async def interact(request: SimpleAgentRequest):
 @app.get("/memory")
 async def get_active_users():
     try:
-        users = simple_agent.memory.get_all_users()
+        users = simple_agent.short_memory.get_all_users()
         return {"total_users": len(users), "active_users": users}
 
     except Exception as e:
@@ -57,7 +58,7 @@ async def get_active_users():
 @app.get("/memory/{user_id}")
 async def get_user_memory(user_id: str):
     try:
-        return simple_agent.memory.get_messages(user_id)
+        return simple_agent.short_memory.get_messages(user_id)
 
     except Exception as e:
         logger.error(f"Error getting memory for user {user_id}: {e}")
@@ -68,7 +69,7 @@ async def get_user_memory(user_id: str):
 @app.delete("/memory/{user_id}")
 async def clear_user_memory(user_id: str):
     try:
-        success = simple_agent.memory.clear_user(user_id)
+        success = simple_agent.short_memory.clear_user(user_id)
         if success:
             return {"message": f"Memory erased for user {user_id}"}
         else:
