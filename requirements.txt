@@ -5,8 +5,10 @@ pydantic
 pytest
 langgraph
 langchain
+langchain-core
 langchain_ollama
 langchain-groq
+langchain
 truststore
 typing
 requests

@@ -1,4 +1,4 @@
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
 
 # ------------------------------------------------------------
 # Here you can create every prompt you will use in your agent.

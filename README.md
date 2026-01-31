@@ -14,9 +14,12 @@ Then, customize it if needed.
 
 ## Build and run service
 
-First, install dependencies with:
+First, create virtual env and install dependencies with:
 
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
+
 pip install --no-cache-dir -r requirements.txt
 ```
 

@@ -1,5 +1,5 @@
 from typing import TypedDict, Optional
-from langchain.schema import AIMessage
+from langchain_core.messages import AIMessage
 
 class SimpleAgentState(TypedDict):
     prompt: str
