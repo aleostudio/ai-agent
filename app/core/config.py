@@ -1,8 +1,24 @@
 import os
+import json
 from dotenv import load_dotenv
+
+from app.mcp.client import MCPServerConfig
 
 # Load env vars from .env file
 load_dotenv()
+
+
+def _parse_mcp_servers(raw: str | None) -> list[MCPServerConfig]:
+    """Parse MCP_SERVERS JSON config."""
+    if not raw:
+        return []
+    
+    try:
+        servers = json.loads(raw)
+        return [MCPServerConfig(**s) for s in servers]
+    except (json.JSONDecodeError, TypeError) as e:
+        raise ValueError(f"Invalid MCP_SERVERS config: {e}")
+
 
 class Settings:
 
@@ -30,5 +46,10 @@ class Settings:
 
     # Agent config
     SOME_USEFUL_VAR: str = os.getenv("SOME_USEFUL_VAR", "some_value")
+
+    # MCP config
+    MCP_SERVERS: list[MCPServerConfig] = _parse_mcp_servers(os.getenv("MCP_SERVERS"))
+    MCP_TOOL_CALL_MAX_ITERATIONS: int = int(os.getenv("MCP_TOOL_CALL_MAX_ITERATIONS", 10))
+
 
 settings = Settings()

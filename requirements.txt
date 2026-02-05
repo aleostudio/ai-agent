@@ -10,5 +10,6 @@ langchain_ollama
 langchain-groq
 langchain
 truststore
+mcp
 typing
 requests
