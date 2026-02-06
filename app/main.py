@@ -6,6 +6,7 @@ from app.core.logger import logger
 from app.agent.simple_agent import SimpleAgent
 from app.model.simple_agent_request import SimpleAgentRequest
 from app.mcp import MCPToolManager
+import uvicorn
 
 # Avoid SSL verification
 import truststore
@@ -13,17 +14,15 @@ truststore.inject_into_ssl()
 
 
 # Global references
-mcp_manager: MCPToolManager | None = None
+mcp_manager = None
 simple_agent: SimpleAgent | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Gestione lifecycle: connessione/disconnessione MCP servers."""
     global mcp_manager, simple_agent
 
-    # Startup
-    logger.info("Starting application...")
+    logger.info("Starting agent")
 
     # Init LLM
     model = init_chat_model(
@@ -35,27 +34,27 @@ async def lifespan(app: FastAPI):
         max_retries=settings.MAX_RETRIES
     )
 
-    # Init MCP manager se configurato
-    if settings.MCP_SERVERS:
-        logger.info(f"Connecting to {len(settings.MCP_SERVERS)} MCP servers...")
+    # Init MCP manager if enabled
+    if settings.MCP_ENABLED and settings.MCP_SERVERS:
+        logger.info(f"MCP enabled, connecting to {len(settings.MCP_SERVERS)} servers")
         mcp_manager = MCPToolManager(settings.MCP_SERVERS)
         try:
             await mcp_manager.connect_all()
-            logger.info(f"MCP servers connected: {mcp_manager.connected_servers}")
         except Exception as e:
             logger.error(f"Failed to connect MCP servers: {e}")
             mcp_manager = None
     else:
-        logger.info("No MCP servers configured")
+        logger.info("MCP disabled, running without tools")
 
     # Init agent
     simple_agent = SimpleAgent(model, mcp_manager)
     logger.info("Agent initialized")
 
+    # Pause: here we are handling HTTP requests, waiting for shutdown
     yield
 
     # Shutdown
-    logger.info("Shutting down application...")
+    logger.info("Shutting down application")
     if mcp_manager:
         await mcp_manager.disconnect_all()
     logger.info("Shutdown complete")
@@ -69,10 +68,9 @@ app = FastAPI(
 )
 
 
-# API exposition
+# Interact API
 @app.post("/interact")
 async def interact(request: SimpleAgentRequest):
-    """Endpoint principale per interagire con l'agent."""
     if not simple_agent:
         raise HTTPException(status_code=503, detail="Agent not initialized")
 
@@ -81,46 +79,55 @@ async def interact(request: SimpleAgentRequest):
         if settings.RESPONSE_TYPE == "text":
             response_type = "generated_text"
 
-        response = await simple_agent.ainteract(request.prompt)
-        logger.info(f"Prompt: {response['agent_response']['prompt']}")
+        response = await simple_agent.async_interact(request.prompt)
 
-        return {"response": response["agent_response"][response_type]}
+        return {
+            "response": response["agent_response"][response_type]
+        }
 
     except Exception as e:
-        logger.error(f"Error in /interact: {e}")
+        logger.error(f"Interact API error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Health check API
+# Health API
 @app.get("/")
 async def health_check():
-    """Health check endpoint."""
-    mcp_status = {
-        "connected": mcp_manager.connected_servers if mcp_manager else [],
-        "tools_count": len(mcp_manager.get_langchain_tools()) if mcp_manager and mcp_manager.is_initialized else 0
-    }
+    mcp_status = None
+    if settings.MCP_ENABLED and mcp_manager:
+        mcp_status = {
+            "connected": mcp_manager.connected_servers,
+            "tools_count": len(mcp_manager.get_langchain_tools()) if mcp_manager.is_initialized else 0
+        }
     
-    return {
+    response = {
         "status": "ok",
         "message": "Service is running",
-        "mcp": mcp_status
     }
+    
+    if mcp_status:
+        response["mcp"] = mcp_status
+    
+    return response
 
 
+# MCP tools list API
 @app.get("/tools")
 async def list_tools():
-    """Lista tutti i tool MCP disponibili."""
+    if not settings.MCP_ENABLED:
+        return {"enabled": False, "tools": []}
+    
     if not mcp_manager or not mcp_manager.is_initialized:
-        return {"tools": []}
+        return {"enabled": True, "connected": False, "tools": []}
 
     tools = mcp_manager.get_langchain_tools()
     return {
-        "tools": [
-            {
-                "name": t.name,
-                "description": t.description
-            }
-            for t in tools
-        ]
+        "enabled": True,
+        "connected": True,
+        "tools": [{"name": t.name, "description": t.description} for t in tools]
     }
 
+
+# App launch if invoked directly
+if __name__ == "__main__":
+    uvicorn.run("app.main:app", host=settings.APP_HOST, port=settings.APP_PORT, log_level="warning")

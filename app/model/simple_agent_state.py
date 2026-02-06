@@ -2,17 +2,16 @@ from typing import TypedDict, Optional, Annotated
 from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
 from langgraph.graph.message import add_messages
 
-
+# Agent state with tools calling support
 class SimpleAgentState(TypedDict):
-    """State per l'agent con supporto tool calling."""
-    
-    # Input utente
+
+    # User input
     prompt: str
     
-    # Messaggi conversazione (accumula con add_messages)
+    # Conversation messages (accumulate through add_messages)
     messages: Annotated[list[BaseMessage], add_messages]
     
-    # Output finale
+    # Final output
     ai_message: Optional[AIMessage]
     generated_text: Optional[str]
     

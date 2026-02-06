@@ -1,8 +1,36 @@
-# Simple AI agent to chat with a LLM
+# Simple AI agent with MCP client
 
-This agent will interact with an existing Ollama instance or other AI providers as a chatbot.
+This agent will interact with an existing **Ollama** instance or other AI providers as a chatbot and it has a built-in **MCP client** to connect to remote MCP servers to use their **tools**.
+
+## Index
+
+- [Prerequisites](#prerequisites)
+- [Configuration](#configuration)
+- [Run service](#run-service)
+- [Customize system prompt](#customize-system-prompt)
+- [Tests](#tests)
+- [Debug in VSCode](#debug-in-vscode)
+
+---
+
+## Prerequisites
+
+- Python >= 3.12
+- [uv](https://docs.astral.sh/uv/getting-started/installation) and [pip](https://pip.pypa.io/en/stable/installation) installed
+
+[↑ index](#index)
+
+---
 
 ## Configuration
+
+Init **virtualenv** and install dependencies with:
+
+```bash
+uv venv
+source .venv/bin/activate
+uv sync
+```
 
 Create your ```.env``` file by copying:
 
@@ -10,26 +38,37 @@ Create your ```.env``` file by copying:
 cp env.dist .env
 ```
 
-Then, customize it if needed.
+Then, customize it if needed (e.g. **model**, **temperature** and so on).
 
-## Build and run service
-
-First, create virtual env and install dependencies with:
+If you want to **enable MCP support**, update these env vars with your URL (`MCP_SERVERS` is in JSON array format; you can add several servers):
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-
-pip install --no-cache-dir -r requirements.txt
+MCP_ENABLED=True
+MCP_SERVERS='[{"name": "mcp-server", "transport": "sse", "url": "http://localhost:8000/sse"}]'
 ```
 
-If you want to run the service through your local interpreter:
+> **NOTE**: 
+> to work properly, tool calling needs a fairly intelligent model, so consider using at least an **8b model**
+
+[↑ index](#index)
+
+---
+
+## Run service
+
+If you want to run the service through your local **uvicorn** to customize host or port:
 
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 9201
 ```
 
-If you want to use Docker, build and run with:
+If you prefer, there is a **shortcut script** with predefined port:
+
+```bash
+sh run.sh
+```
+
+If you want to use **Docker**, build and run with:
 
 ```bash
 docker-compose build
@@ -48,7 +87,7 @@ You can start the conversation with this simple payload:
 curl -XPOST "http://localhost:9201/interact" \
 --header "Content-Type: application/json" \
 --data '{
-    "prompt": "Hi! Can you write me a list of things I can ask you?"
+    "prompt": "Hi! Who are you?"
 }'
 ```
 
@@ -57,7 +96,7 @@ The response will be something like this payload:
 ```json
 {
     "response": {
-        "content": "I'd be happy to help you with questions and tasks. Here's a list of things you can ask me:\n\n**General Knowledge**\n\n* Ask me about history, science, technology, literature, art, music, or any other topic\n* Get information on countries, cities, landmarks, cultures, and more\n* I can provide definitions for words, phrases, and concepts\n\n**Language and Writing**\n\n* Ask me to write a story, poem, or script\n* Get grammar and spelling suggestions\n* Practice writing in different styles (e.g., persuasive, narrative, descriptive)\n* Learn vocabulary through word associations, synonyms, antonyms\n\n**Math and Calculations**\n\n* Solve math problems, from basic arithmetic to advanced calculus\n* Get explanations for mathematical concepts and formulas\n* Calculate percentages, ratios, and conversions\n\n**Conversational Dialogue**\n\n* Engage in a conversation on a topic of your choice\n* Role-play different scenarios (e.g., job interview, customer service)\n* Practice social skills, such as active listening and responding\n\n**Creative Tasks**\n\n* Generate ideas for creative projects (e.g., writing, art, music)\n* Collaborate on brainstorming exercises\n* Get feedback on drafts or works-in-progress\n\n**Jokes and Entertainment**\n\n* Share jokes or puns with me\n* Play simple games (e.g., 20 Questions, Hangman)\n* Listen to or generate humor-related content\n\n**Trivia and Quizzes**\n\n* Take a quiz on various subjects\n* Test your knowledge on specific topics\n* Get hints or explanations for tricky questions\n\nFeel free to get creative and ask me anything that's on your mind!",
+        "content": "Hello! I'm a helpful assistant here to assist with any questions or tasks you may have. I'm designed to provide clear and accurate information on a wide range of topics, from science and history to entertainment and culture. Feel free to ask me anything, and I'll do my best to help!",
         "additional_kwargs": {},
         "response_metadata": {
             "model": "llama3.2",
@@ -92,12 +131,28 @@ The response will be something like this payload:
 }
 ```
 
+[↑ index](#index)
+
+---
+
+## Customize system prompt
+
+In order to customize **system prompts** open the file `app/prompts.py`.
+Here you will find:
+
+- `SYSTEM_PROMPT`: standard prompt used for generic questions
+- `SYSTEM_PROMPT_TOOLS`: prompt used by LLM if tools calling is enabled
+
+[↑ index](#index)
+
+---
+
 ## Tests
 
 Ensure you have ```pytest``` installed, otherwise:
 
 ```bash
-pip install pytest
+uv pip install pytest
 ```
 
 Then, launch tests with:
@@ -106,7 +161,11 @@ Then, launch tests with:
 pytest tests/
 ```
 
-## Debug
+[↑ index](#index)
+
+---
+
+## Debug in VSCode
 
 To debug your Python microservice you need to:
 
@@ -143,3 +202,9 @@ To debug your Python microservice you need to:
 
 - Put some breakpoint in the code, then press the **green play button**
 - Call the API to debug
+
+[↑ index](#index)
+
+---
+
+Made with ♥️ by Alessandro Orrù

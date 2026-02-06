@@ -1,8 +1,9 @@
 import logging
+import sys
 from app.core.config import settings
 
+# MCP disconnection errors filter
 class MCPDisconnectFilter(logging.Filter):
-    """Filter MCP disconnection errors."""
     def filter(self, record: logging.LogRecord) -> bool:
         msg = record.getMessage().lower()
         if "peer closed connection" in msg:
@@ -13,22 +14,28 @@ class MCPDisconnectFilter(logging.Filter):
             return False
         return True
 
+
 def init_logger():
 
     # Log level
     level = logging.DEBUG if settings.DEBUG else logging.INFO
-    logger = logging.getLogger(settings.APP_NAME)
-    logger.setLevel(level)
 
     # Custom formatter
-    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
 
     # Console Handler
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(formatter)
-    console_handler.setLevel(level)
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(formatter)
 
-    logger.addHandler(console_handler)
+    # Root logger (uvicorn included)
+    root_logger = logging.getLogger()
+    root_logger.setLevel(level)
+    root_logger.handlers = [handler]
+
+    # Stop verbose logger
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
 
     # Stop MCP disconnection errors
     logging.getLogger("mcp.client.sse").setLevel(logging.CRITICAL)
@@ -37,7 +44,12 @@ def init_logger():
     for logger_name in ["mcp", "httpx", "httpcore"]:
         logging.getLogger(logger_name).addFilter(MCPDisconnectFilter())
 
+    # Logger app
+    logger = logging.getLogger(settings.APP_NAME)
+    logger.setLevel(level)
+
     return logger
 
 
+# Instance
 logger = init_logger()
