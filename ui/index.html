@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AI agent playground</title>
+  <style>
+    :root{--bg:#0b0f19;--border:rgba(255,255,255,.10);--text:rgba(255,255,255,.92);--muted:rgba(255,255,255,.78);--accent:#7aa2ff;--shadow:0 8px 30px rgba(0,0,0,.35);--mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;--sans:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";--vv-bottom:0px;--composer-h:90px;}
+    *{box-sizing:border-box;}
+    html,body{height:100%;}
+    html{background:radial-gradient(1200px 600px at 30% -10%,rgba(122,162,255,.22),transparent 60%),radial-gradient(900px 500px at 90% 10%,rgba(92,242,194,.18),transparent 55%),var(--bg);background-repeat:no-repeat;background-attachment:fixed;}
+    body{margin:0;background:transparent;color:var(--text);font-family:var(--sans);}
+    .app{height:100vh;}
+    .main{display:flex;flex-direction:column;height:100vh;min-width:0;}
+    .chat{flex:1;overflow:auto;min-width:0;padding-bottom:calc(var(--composer-h) + 18px + var(--vv-bottom,0px))!important;}
+    .chat-inner{max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:12px;padding:20px;}
+    .msg{display:flex;gap:10px;width:100%;}
+    .avatar{width:34px;height:34px;border-radius:6px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);background:rgba(255,255,255,.04);color:var(--muted);font-weight:900;flex:0 0 auto;}
+    .bubble{border:1px solid var(--border);border-radius:6px;padding:12px 14px;line-height:1.45;box-shadow:var(--shadow);max-width:78%;white-space:pre-wrap;}
+    .msg.user{justify-content:flex-end;flex-direction:row-reverse;align-self:flex-end;}
+    .msg.user .bubble{background:rgba(31,42,68,.58);text-align:left;margin-left:auto;}
+    .msg.assistant .bubble{background:rgba(18,26,48,.70);}
+    .typing-indicator{display:inline-flex;gap:4px;align-items:center;padding:4px 0;}
+    .typing-indicator span{width:6px;height:6px;background:var(--muted);border-radius:50%;opacity:.4;animation:typing-pulse 1.4s ease-in-out infinite;}
+    .typing-indicator span:nth-child(2){animation-delay:.2s;}
+    .typing-indicator span:nth-child(3){animation-delay:.4s;}
+    @keyframes typing-pulse{0%,60%,100%{opacity:.4;transform:scale(1);}30%{opacity:1;transform:scale(1.2);}}
+    .composer{position:fixed;left:0;right:0;bottom:var(--vv-bottom);padding:14px 16px 18px;border-top:1px solid var(--border);background:rgba(10,14,25,.86);backdrop-filter:blur(10px);}
+    .composer-inner{max-width:860px;margin:0 auto;display:flex;gap:10px;align-items:flex-end;}
+    .mono{font-family:var(--mono);}
+    textarea{flex:1;resize:none;min-height:46px;max-height:160px;padding:12px 12px;border-radius:6px;border:1px solid var(--border);background:rgba(0,0,0,.28);color:var(--text);outline:none;line-height:1.35;font-family:var(--sans);}
+    .send{width:80px;padding:12px 12px;border-radius:6px;border:1px solid rgba(122,162,255,.50);background:rgba(122,162,255,.16);color:var(--text);font-weight:900;cursor:pointer;transition:transform .04s ease,background .2s ease;}
+    .send:hover{background:rgba(122,162,255,.20);}
+    .send:active{transform:translateY(1px);}
+    .send[disabled]{opacity:.55;cursor:not-allowed;}
+    @media (max-width:900px){.chat-inner,.composer-inner{max-width:100%;}}
+  </style>
+</head>
+<body>
+  <div class="app" id="appRoot">
+    <main class="main">
+      <div class="chat" id="chat">
+        <div class="chat-inner" id="chatInner"></div>
+      </div>
+      <div class="composer" id="composer">
+        <div class="composer-inner">
+          <label for="input" class="mono" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;">Message input</label>
+          <textarea id="input" placeholder="Message (enter to send, shift+enter for newline)"></textarea>
+          <button class="send" id="btnSend" type="button">Send</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module">
+    const $ = (id) => document.getElementById(id);
+
+    const API_BASE = "http://localhost:9201";
+
+    const chat = $("chat");
+    const chatInner = $("chatInner");
+    const input = $("input");
+    const btnSend = $("btnSend");
+
+    function setComposerH() {
+      const composer = $("composer");
+      if (!composer) return;
+      const h = composer.getBoundingClientRect().height || 84;
+      document.documentElement.style.setProperty("--composer-h", `${Math.round(h)}px`);
+    }
+
+    function setVvBottom() {
+      const vv = globalThis.visualViewport;
+      if (!vv) return;
+      const bottom = Math.max(0, (globalThis.innerHeight - (vv.height + vv.offsetTop)));
+      document.documentElement.style.setProperty("--vv-bottom", `${Math.round(bottom)}px`);
+    }
+
+    function autoScroll() {
+      const safePad = Number.parseInt(getComputedStyle(document.documentElement).getPropertyValue("--composer-h")) || 84;
+      chat.scrollTop = chat.scrollHeight + safePad + 200;
+    }
+
+    function syncLayout() { setVvBottom(); setComposerH(); }
+    if (globalThis.visualViewport) {
+      visualViewport.addEventListener("resize", () => { syncLayout(); autoScroll(); }, { passive: true });
+      visualViewport.addEventListener("scroll", () => { syncLayout(); autoScroll(); }, { passive: true });
+    }
+    globalThis.addEventListener("resize", () => { syncLayout(); }, { passive: true });
+    syncLayout();
+
+    function focusComposer() { input.focus(); }
+
+    function addMessage(role, text, isTyping = false) {
+      const wrap = document.createElement("div");
+      wrap.className = "msg " + role;
+      const avatar = document.createElement("div");
+      avatar.className = "avatar";
+      avatar.textContent = role === "user" ? "U" : "A";
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+      if (isTyping) {
+        const indicator = document.createElement("div");
+        indicator.className = "typing-indicator";
+        indicator.innerHTML = "<span></span><span></span><span></span>";
+        bubble.appendChild(indicator);
+      } else {
+        bubble.textContent = String(text || "");
+      }
+      wrap.appendChild(avatar);
+      wrap.appendChild(bubble);
+      chatInner.appendChild(wrap);
+      autoScroll();
+      return { wrap, bubble };
+    }
+
+    function buildPayload(prompt) { return { prompt }; }
+
+    function extractNonStreamContent(obj) {
+      if (typeof obj?.response === "string") return obj.response;
+      return obj?.response?.content ?? obj?.content ?? obj?.choices?.[0]?.message?.content ?? obj?.choices?.[0]?.delta?.content ?? "";
+    }
+
+    function makeRenderer(state) {
+      let scheduled = false;
+      const render = () => {
+        scheduled = false;
+        const typingIndicator = state.bubble.querySelector(".typing-indicator");
+        if (typingIndicator) typingIndicator.remove();
+        state.bubble.textContent = state.rawText;
+        autoScroll();
+      };
+      const scheduleRender = () => {
+        if (scheduled) return;
+        scheduled = true;
+        requestAnimationFrame(render);
+      };
+      return { render, scheduleRender };
+    }
+
+    function isSseResponse(res) {
+      const ct = (res.headers.get("content-type") || "").toLowerCase();
+      return ct.includes("text/event-stream");
+    }
+
+    function extractSseData(eventBlock) {
+      const dataLines = [];
+      for (const line of eventBlock.split("\n")) {
+        if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
+      }
+      if (dataLines.length === 0) return "";
+      return dataLines.join("\n");
+    }
+
+    async function handleNonStreamResponse(res, state, render) {
+      const obj = await res.json().catch(() => ({}));
+      const content = extractNonStreamContent(obj);
+      state.rawText += String(content || "");
+      render();
+    }
+
+    async function handleStreamResponse(res, state, render, scheduleRender) {
+      if (!res.body) throw new Error("Missing response body");
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true }).replaceAll('\r\n', "\n");
+        buffer = await consumeBuffer(buffer, reader, state, render, scheduleRender);
+      }
+      render();
+    }
+
+    async function consumeBuffer(buffer, reader, state, render, scheduleRender) {
+      let sep;
+      while ((sep = buffer.indexOf("\n\n")) >= 0) {
+        const eventBlock = buffer.slice(0, sep);
+        buffer = buffer.slice(sep + 2);
+        if (await handleEventBlock(eventBlock, reader, state, render, scheduleRender)) {
+          return "";
+        }
+      }
+      return buffer;
+    }
+
+    async function handleEventBlock(eventBlock, reader, state, render, scheduleRender) {
+      const dataStr = extractSseData(eventBlock);
+      if (!dataStr) return false;
+      if (dataStr.trim() === "[DONE]") {
+        render();
+        try { await reader.cancel(); } catch {}
+        return true;
+      }
+      try {
+        const obj = JSON.parse(dataStr);
+        const delta = obj?.choices?.[0]?.delta?.content ?? "";
+        if (delta) {
+          state.rawText += delta;
+          scheduleRender();
+        }
+      } catch {}
+      return false;
+    }
+
+    async function streamChat(payload, state) {
+      const res = await fetch(`${API_BASE}/interact`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json", "Accept": "text/event-stream"},
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const t = await res.text().catch(() => "");
+        throw new Error(t || `HTTP ${res.status}`);
+      }
+      const { render, scheduleRender } = makeRenderer(state);
+      if (!isSseResponse(res)) {
+        await handleNonStreamResponse(res, state, render);
+        return;
+      }
+      await handleStreamResponse(res, state, render, scheduleRender);
+    }
+
+    async function send() {
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = "";
+      focusComposer();
+      addMessage("user", text);
+      const { wrap, bubble } = addMessage("assistant", "", true);
+      const state = { wrap, bubble, rawText: "" };
+      btnSend.disabled = true;
+      try {
+        await streamChat(buildPayload(text), state);
+      } catch (e) {
+        console.error("Streaming error:", e);
+        bubble.textContent = `Error: ${String(e)}`;
+      } finally {
+        btnSend.disabled = false;
+        syncLayout();
+        autoScroll();
+        focusComposer();
+      }
+    }
+
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        void send();
+      }
+    });
+    btnSend.addEventListener("click", () => { void send(); });
+
+    focusComposer();
+    autoScroll();
+  </script>
+</body>
+</html>

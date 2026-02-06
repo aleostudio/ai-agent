@@ -1,5 +1,7 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse, StreamingResponse
 from langchain.chat_models import init_chat_model
 from app.core.config import settings
 from app.core.logger import logger
@@ -75,15 +77,15 @@ async def interact(request: SimpleAgentRequest):
         raise HTTPException(status_code=503, detail="Agent not initialized")
 
     try:
-        response_type = "ai_message"
-        if settings.RESPONSE_TYPE == "text":
-            response_type = "generated_text"
+        # Streaming mode
+        if settings.RESPONSE_TYPE == "stream":
+            return StreamingResponse(simple_agent.stream_interact(request.prompt), media_type="text/event-stream")
 
+        # Sync modes
+        response_type = "ai_message" if settings.RESPONSE_TYPE == "full" else "generated_text"
         response = await simple_agent.async_interact(request.prompt)
-
-        return {
-            "response": response["agent_response"][response_type]
-        }
+        
+        return {"response": response["agent_response"][response_type]}
 
     except Exception as e:
         logger.error(f"Interact API error: {e}")
@@ -126,6 +128,13 @@ async def list_tools():
         "connected": True,
         "tools": [{"name": t.name, "description": t.description} for t in tools]
     }
+
+
+# Web UI to test model
+@app.get("/ui", response_class=HTMLResponse)
+def ui() -> HTMLResponse:
+    ui_path = Path(__file__).parent.parent / "ui" / "index.html"
+    return HTMLResponse(ui_path.read_text(encoding="utf-8"))
 
 
 # App launch if invoked directly

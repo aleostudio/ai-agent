@@ -1,5 +1,5 @@
 import json
-from typing import Literal
+from typing import Literal, AsyncIterator
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, SystemMessage
 from langgraph.graph import StateGraph, END
@@ -7,6 +7,7 @@ from app.core.config import settings
 from app.core.logger import logger
 from app.model.simple_agent_state import SimpleAgentState
 import app.prompts as prompts
+
 
 # Agent with optional MCP tool calling
 class SimpleAgent:
@@ -107,33 +108,40 @@ class SimpleAgent:
         if not isinstance(last_message, AIMessage) or not last_message.tool_calls:
             return {"messages": []}
 
-        tool_messages = []
-
-        for tool_call in last_message.tool_calls:
-            tool_name = tool_call["name"]
-            tool_args = self._sanitize_tool_args(tool_call["args"])
-            tool_id = tool_call["id"]
-            logger.info(f"Executing tool: {tool_name}")
-
-            try:
-                result = await self.mcp_manager.call_tool(tool_name, tool_args)
-                result_str = self._serialize_result(result)
-                logger.info(f"Tool {tool_name} completed")
-
-            except Exception as e:
-                logger.error(f"Tool {tool_name} failed: {e}")
-                result_str = json.dumps({
-                    "success": False, 
-                    "error": str(e),
-                    "tool": tool_name
-                })
-
-            tool_messages.append(ToolMessage(content=result_str, tool_call_id=tool_id))
+        tool_messages = await self._execute_tool_calls(last_message.tool_calls)
 
         return {
             "messages": tool_messages,
             "tool_calls_count": state.get("tool_calls_count", 0) + len(tool_messages)
         }
+
+
+    # Execute tool calls and return ToolMessages
+    async def _execute_tool_calls(self, tool_calls: list) -> list[ToolMessage]:
+        tool_messages = []
+        for tool_call in tool_calls:
+            result_str = await self._call_single_tool(tool_call)
+            tool_messages.append(ToolMessage(content=result_str, tool_call_id=tool_call["id"]))
+
+        return tool_messages
+
+
+    # Execute a single tool and return serialized result
+    async def _call_single_tool(self, tool_call: dict) -> str:
+        tool_name = tool_call["name"]
+        tool_args = self._sanitize_tool_args(tool_call["args"])
+        logger.info(f"Executing tool: {tool_name}")
+
+        try:
+            result = await self.mcp_manager.call_tool(tool_name, tool_args)
+            logger.info(f"Tool {tool_name} completed")
+
+            return self._serialize_result(result)
+
+        except Exception as e:
+            logger.error(f"Tool {tool_name} failed: {e}")
+
+            return json.dumps({"success": False, "error": str(e), "tool": tool_name})
 
 
     # Sanitize tool arguments
@@ -189,7 +197,57 @@ class SimpleAgent:
             "generated_text": None,
             "tool_calls_count": 0
         })
+
         return {"agent_response": output}
+
+
+    # Interact with agent (streaming tokens)
+    async def stream_interact(self, prompt: str) -> AsyncIterator[str]:
+        messages = [
+            SystemMessage(content=self.system_prompt),
+            HumanMessage(content=prompt)
+        ]
+        
+        if self.tools_enabled:
+            async for chunk in self._stream_with_tools(messages):
+                yield chunk
+        else:
+            async for chunk in self._stream_direct(messages):
+                yield chunk
+
+
+    # Stream direct response without tools
+    async def _stream_direct(self, messages: list) -> AsyncIterator[str]:
+        async for chunk in self.base_model.astream(messages):
+            if chunk.content:
+                payload = {
+                    "choices": [{
+                        "delta": {"content": chunk.content},
+                        "index": 0
+                    }]
+                }
+                yield f"data: {json.dumps(payload)}\n\n"
+        yield "data: [DONE]\n\n"
+
+
+    # Stream with ReAct loop for tools
+    async def _stream_with_tools(self, messages: list) -> AsyncIterator[str]:
+        state = {"messages": messages, "tool_calls_count": 0}
+        
+        while state["tool_calls_count"] < settings.MCP_TOOL_CALL_MAX_ITERATIONS:
+            response = self.model.invoke(state["messages"])
+            state["messages"].append(response)
+            
+            if not response.tool_calls:
+                async for chunk in self._stream_direct(state["messages"][:-1]):
+                    yield chunk
+                return
+            
+            tool_messages = await self._execute_tool_calls(response.tool_calls)
+            state["messages"].extend(tool_messages)
+            state["tool_calls_count"] += 1
+        
+        yield "data: [MAX_ITERATIONS]\n\n"
 
 
     # Get available tools name

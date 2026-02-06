@@ -8,6 +8,7 @@ This agent will interact with an existing **Ollama** instance or other AI provid
 - [Configuration](#configuration)
 - [Run service](#run-service)
 - [Customize system prompt](#customize-system-prompt)
+- [UI for debug](#ui-for-debug)
 - [Tests](#tests)
 - [Debug in VSCode](#debug-in-vscode)
 
@@ -47,8 +48,14 @@ MCP_ENABLED=True
 MCP_SERVERS='[{"name": "mcp-server", "transport": "sse", "url": "http://localhost:8000/sse"}]'
 ```
 
-> **NOTE**: 
+> **NOTE**:
 > to work properly, tool calling needs a fairly intelligent model, so consider using at least an **8b model**
+
+If you want to **stream** the agent response, change this variable in:
+
+```bash
+RESPONSE_TYPE="stream"
+```
 
 [↑ index](#index)
 
@@ -142,6 +149,14 @@ Here you will find:
 
 - `SYSTEM_PROMPT`: standard prompt used for generic questions
 - `SYSTEM_PROMPT_TOOLS`: prompt used by LLM if tools calling is enabled
+
+[↑ index](#index)
+
+---
+
+### UI for debug
+
+If you want to test the agent through an UI, there is a built-in ChatGPT-like UI at [this address](http://127.0.0.1:9201/ui).
 
 [↑ index](#index)
 
