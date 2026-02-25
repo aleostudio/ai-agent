@@ -156,7 +156,7 @@ Here you will find:
 
 ### UI for debug
 
-If you want to test the agent through an UI, there is a built-in ChatGPT-like UI at [this address](http://127.0.0.1:9201/ui).
+If you want to test the agent through an UI, there is a built-in ChatGPT-like UI at [this address](http://localhost:9201/ui).
 
 [↑ index](#index)
 
