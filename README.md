@@ -57,11 +57,10 @@ A2A_ROLE=orchestrator
 REGISTRY_URL=http://localhost:9300
 ```
 
-Pay attention that `orchestrator` will use **other A2A agents** discovered by A2A registry. If you set `client` as role, this agent will work as a specific A2A agent,
-called by another A2A orchestrator.
+Pay attention that `orchestrator` will use **other A2A agents** discovered by A2A registry. If you set `client` as role, this agent will work as a specific A2A agent, called by another A2A orchestrator.
 
 > **NOTE**:
-> to work properly, tool calling needs a fairly intelligent model, so consider using at least an **8b model**
+> to work properly, tool calling needs a fairly intelligent model, so consider using at least a **8b model** or more.
 
 If you want to **stream** the agent response, change this variable in:
 
@@ -167,17 +166,24 @@ Here you will find:
 
 ### SYSTEM_PROMPT
 
-Standard prompt used for generic questions (like chatbot). It will be used if `MCP_ENABLED` and `A2A_ENABLED` are set to `false`.
+This prompt is used for **standard LLM agent** (generic questions like chatbot).
+
+Set `MCP_ENABLED` and `A2A_ENABLED` to `false` and call the agent via API.
 
 ### SYSTEM_PROMPT_A2A_ORCH
 
-Used if `A2A_ENABLED` is `true` and `A2A_ROLE` is `orchestrator`. It will be used
-if you want to call other A2A agents connected to the A2A registry.
+This prompt is used for **A2A orchestrator agent** (an orchestrator that route
+the request to other A2A agents). The agents are dynamically injected inside the
+prompt, reading the agents list from A2A registry.
+
+Set `A2A_ENABLED` to `true` and `A2A_ROLE` to `orchestrator`.
 
 ### SYSTEM_PROMPT_A2A_CLIENT
 
-Used if `A2A_ENABLED` is `true` and `A2A_ROLE` is `client`. It will be used
-if you want to expose a specific tool through A2A (you will be called by an orchestrator).
+If you need to expose a specific tool through A2A, you need to customize this prompt.
+An orchestrator will read your card (`app/a2a_card.py`) and will route the request to this agent.
+
+Set `A2A_ENABLED` to `true` and `A2A_ROLE` to `client`.
 
 ### TOOLS_SECTION
 
