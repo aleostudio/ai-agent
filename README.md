@@ -1,6 +1,6 @@
-# Simple AI agent with MCP client
+# Simple AI agent with MCP/A2A client
 
-This agent will interact with an existing **Ollama** instance or other AI providers as a chatbot and it has a built-in **MCP client** to connect to remote MCP servers to use their **tools**.
+This agent will interact with an existing **Ollama** instance or other AI providers as a chatbot and it has built-in **MCP** and **A2A clients** to connect to remote MCP servers or A2A registry to use their **tools**.
 
 ## Index
 
@@ -49,6 +49,17 @@ MCP_ENABLED=True
 MCP_SERVERS='[{"name": "mcp-server", "transport": "sse", "url": "http://localhost:8000/sse"}]'
 ```
 
+If you want to **enable A2A support**, set these variables:
+
+```bash
+A2A_ENABLED=true
+A2A_ROLE=orchestrator
+REGISTRY_URL=http://localhost:9300
+```
+
+Pay attention that `orchestrator` will use **other A2A agents** discovered by A2A registry. If you set `client` as role, this agent will work as a specific A2A agent,
+called by another A2A orchestrator.
+
 > **NOTE**:
 > to work properly, tool calling needs a fairly intelligent model, so consider using at least an **8b model**
 
@@ -74,6 +85,12 @@ If you prefer, there is a **shortcut script** with predefined port:
 
 ```bash
 sh run.sh
+```
+
+or simply with the built-in **Makefile**
+
+```bash
+make
 ```
 
 If you want to use **Docker**, build and run with:
@@ -148,7 +165,28 @@ The response will be something like this payload:
 In order to customize **system prompts** open the file `app/prompts.py`.
 Here you will find:
 
-- `SYSTEM_PROMPT`: standard prompt used for generic questions
+### SYSTEM_PROMPT
+
+Standard prompt used for generic questions (like chatbot). It will be used if `MCP_ENABLED` and `A2A_ENABLED` are set to `false`
+
+### SYSTEM_PROMPT_A2A_ORCH
+
+Used if `A2A_ENABLED` is `true` and `A2A_ROLE` is `orchestrator`. It will be used
+if you want to call other A2A agents connected to the A2A registry.
+
+### SYSTEM_PROMPT_A2A_CLIENT
+
+Used if `A2A_ENABLED` is `true` and `A2A_ROLE` is `client`. It will be used
+if you want to expose a specific tool through A2A (you will be called by an orchestrator).
+
+### TOOLS_SECTION
+
+Tools definition prompt. It will be used to enforce the tools guidelines, if
+`MCP_ENABLED` or `A2A_ENABLED` are set to `true`.
+
+
+
+- `SYSTEM_PROMPT_A2A_ORCH`: if ``
 - `SYSTEM_PROMPT_TOOLS`: prompt used by LLM if tools calling is enabled
 
 [↑ index](#index)

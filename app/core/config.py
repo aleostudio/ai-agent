@@ -49,6 +49,7 @@ class Settings:
 
     # A2A config
     A2A_ENABLED: bool = os.getenv("A2A_ENABLED", "False").lower() == "true"
+    A2A_ROLE: str = os.getenv("A2A_ROLE", "client")  # "client" | "orchestrator"
     REGISTRY_URL: str = os.getenv("REGISTRY_URL", "http://localhost:9300")
     REGISTRY_TIMEOUT_S: float = float(os.getenv("REGISTRY_TIMEOUT_S", "4.0"))
 

@@ -8,6 +8,7 @@ from app.core.logger import logger
 from app.agent.simple_agent import SimpleAgent
 from app.model.simple_agent_request import SimpleAgentRequest
 from app.core.mcp import MCPToolManager
+from app.a2a_card import build_agent_card
 import asyncio
 import uvicorn
 
@@ -49,12 +50,33 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("MCP disabled, running without tools")
 
-    # Init agent
-    simple_agent = SimpleAgent(model, mcp_manager)
+    # Init agent — branch on A2A role
+    a2a_registration_task = None
+    extra_tools = []
+
+    if settings.A2A_ENABLED and settings.A2A_ROLE == "orchestrator":
+        from app.core.a2a.orchestrator import fetch_agents_from_registry, build_orchestrator_tools
+        import app.prompts as prompts
+
+        remote_agents = await fetch_agents_from_registry()
+        if remote_agents:
+            extra_tools = build_orchestrator_tools(remote_agents)
+            agents_for_prompt = [
+                {"name": a["card"]["name"], "description": a["card"].get("description", "")}
+                for a in remote_agents
+            ]
+            system_prompt = prompts.build_system_prompt("a2a_orchestrator", tool_names=[t.name for t in extra_tools], agents=agents_for_prompt)
+            simple_agent = SimpleAgent(model, mcp_manager, system_prompt=system_prompt, extra_tools=extra_tools)
+            logger.info(f"A2A orchestrator initialized with {len(extra_tools)} routing tool(s)")
+        else:
+            logger.warning("No remote agents found, falling back to standard agent")
+            simple_agent = SimpleAgent(model, mcp_manager)
+    else:
+        simple_agent = SimpleAgent(model, mcp_manager)
+
     logger.info("Agent initialized")
 
-    # Mount A2A sub-application if enabled
-    a2a_registration_task = None
+    # Mount A2A sub-application if enabled (both client and orchestrator serve the A2A endpoint)
     if settings.A2A_ENABLED:
         from app.core.a2a import SimpleAgentExecutor, create_a2a_starlette_app, build_agent_card, register_with_registry
 
@@ -63,7 +85,7 @@ async def lifespan(app: FastAPI):
         a2a_app = create_a2a_starlette_app(agent_card, agent_executor)
         app.mount("", a2a_app)
         a2a_registration_task = asyncio.create_task(register_with_registry(settings.APP_URL))
-        logger.info(f"A2A enabled, registering on {settings.REGISTRY_URL}")
+        logger.info(f"A2A enabled ({settings.A2A_ROLE}), registering on {settings.REGISTRY_URL}")
     else:
         logger.info("A2A disabled")
 
@@ -83,11 +105,7 @@ async def lifespan(app: FastAPI):
 
 
 # App init
-app = FastAPI(
-    title=settings.APP_NAME,
-    version=settings.APP_VERSION,
-    lifespan=lifespan
-)
+app = FastAPI(title=settings.APP_NAME, version=settings.APP_VERSION, lifespan=lifespan)
 
 
 # Interact API
@@ -124,14 +142,9 @@ async def health_check():
 
     a2a_status = None
     if settings.A2A_ENABLED:
-        a2a_status = {
-            "registry": settings.REGISTRY_URL,
-        }
+        a2a_status = {"registry": settings.REGISTRY_URL}
 
-    response = {
-        "status": "ok",
-        "message": "Service is running",
-    }
+    response = {"status": "ok", "message": "Service is running"}
 
     if mcp_status:
         response["mcp"] = mcp_status

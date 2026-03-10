@@ -1,4 +1,5 @@
 import json
+import re
 from typing import Literal, AsyncIterator
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, SystemMessage
@@ -12,17 +13,20 @@ import app.prompts as prompts
 # Agent with optional MCP tool calling
 class SimpleAgent:
 
-    def __init__(self, model: BaseChatModel, mcp_manager=None, system_prompt: str | None = None):
+    def __init__(self, model: BaseChatModel, mcp_manager=None, system_prompt: str | None = None, extra_tools: list | None = None):
         self.base_model = model
         self.mcp_manager = mcp_manager
+        self.extra_tools = extra_tools or []
+        self.extra_tools_map = {t.name: t for t in self.extra_tools}
         self.tools_enabled = self._has_tools()
-        
-        # Get incoming system prompt if provided, otherwise choose right system prompt
+
+        # Get incoming system prompt if provided, otherwise build dynamic prompt
         if system_prompt:
             self.system_prompt = system_prompt
         else:
-            self.system_prompt = prompts.SYSTEM_PROMPT_TOOLS.format() if self.tools_enabled else prompts.SYSTEM_PROMPT.format()
-        
+            tool_names = self.get_tool_names() if self.tools_enabled else None
+            self.system_prompt = prompts.build_system_prompt("chat", tool_names=tool_names)
+
         # Bind tools if enabled
         self.model = self._bind_tools(model) if self.tools_enabled else model
         
@@ -31,18 +35,22 @@ class SimpleAgent:
         self.graph = self.workflow.compile()
 
 
-    # Check if there are tools available
+    # Check if there are tools available (MCP or extra)
     def _has_tools(self) -> bool:
-        return (
-            self.mcp_manager is not None 
-            and self.mcp_manager.is_initialized 
+        has_mcp = (
+            self.mcp_manager is not None
+            and self.mcp_manager.is_initialized
             and len(self.mcp_manager.get_langchain_tools()) > 0
         )
+        return has_mcp or len(self.extra_tools) > 0
 
 
-    # Bind tools to the model
+    # Bind tools to the model (MCP + extra)
     def _bind_tools(self, model: BaseChatModel) -> BaseChatModel:
-        tools = self.mcp_manager.get_langchain_tools()
+        tools = []
+        if self.mcp_manager and self.mcp_manager.is_initialized:
+            tools.extend(self.mcp_manager.get_langchain_tools())
+        tools.extend(self.extra_tools)
         logger.info(f"Binding {len(tools)} tools to model: {[t.name for t in tools]}")
         return model.bind_tools(tools)
 
@@ -94,10 +102,16 @@ class SimpleAgent:
         if self.tools_enabled and response.tool_calls:
             logger.info(f"LLM calling {len(response.tool_calls)} tool(s): {[tc['name'] for tc in response.tool_calls]}")
 
+        # Clean up text if model leaked tool syntax instead of making a proper tool call
+        content = response.content if not response.tool_calls else None
+        if content and self.tools_enabled:
+            content = self._clean_tool_leaks(content)
+            response.content = content
+
         return {
             "messages": [response],
             "ai_message": response,
-            "generated_text": response.content if not response.tool_calls else None
+            "generated_text": content
         }
 
 
@@ -133,6 +147,13 @@ class SimpleAgent:
         logger.info(f"Executing tool: {tool_name}")
 
         try:
+            # Check extra tools first (A2A routing tools, etc.)
+            if tool_name in self.extra_tools_map:
+                result = await self.extra_tools_map[tool_name]._arun(**tool_args)
+                logger.info(f"Tool {tool_name} completed")
+                return self._serialize_result(result)
+
+            # Fallback to MCP tools
             result = await self.mcp_manager.call_tool(tool_name, tool_args)
             logger.info(f"Tool {tool_name} completed")
 
@@ -168,11 +189,41 @@ class SimpleAgent:
                 result = json.loads(result)
             except json.JSONDecodeError:
                 return result
-        
+
         if isinstance(result, (dict, list)):
             return json.dumps(result, ensure_ascii=False, indent=2)
-        
+
         return str(result) if result is not None else "Success"
+
+
+    # Clean up model output when it leaks tool names/JSON instead of making a proper tool call.
+    # Common with smaller models (e.g. llama3.1:8b) that don't support structured tool calling well.
+    def _clean_tool_leaks(self, text: str) -> str:
+        if not text:
+            return text
+
+        # Remove inline JSON objects that look like tool calls ({"name": "...", "parameters": {...}})
+        cleaned = re.sub(r'\{["\']name["\']:\s*["\'][\w_-]+["\'].*?\}(?:\s*\})?', '', text, flags=re.DOTALL)
+
+        # Remove sentences that reference tool names, functions, or tool invocation
+        tool_patterns = [
+            r'(?i)[^\n.]*\b(?:function|tool)\s+(?:call|invocation|name)[^\n.]*[.\n]?',
+            r'(?i)[^\n.]*\bmcp-server__\w+[^\n.]*[.\n]?',
+            r'(?i)[^\n.]*\bI (?:don\'t have|cannot find|lack) (?:a |the )?(?:specific |direct )?(?:function|tool)[^\n.]*[.\n]?',
+            r'(?i)[^\n.]*\bI\'ll (?:suggest|attempt|try) (?:to )?(?:call|use|invoke)[^\n.]*[.\n]?',
+            r'(?i)[^\n.]*\bHere\'s the JSON[^\n.]*[.\n]?',
+            r'(?i)[^\n.]*\bprovided functions?\b[^\n.]*[.\n]?',
+        ]
+        for pattern in tool_patterns:
+            cleaned = re.sub(pattern, '', cleaned)
+
+        # Collapse leftover whitespace
+        cleaned = re.sub(r'\n{3,}', '\n\n', cleaned).strip()
+
+        if cleaned != text:
+            logger.debug("Cleaned tool leak from model response")
+
+        return cleaned
 
 
     # Interact with agent (sync)
@@ -250,9 +301,13 @@ class SimpleAgent:
         yield "data: [MAX_ITERATIONS]\n\n"
 
 
-    # Get available tools name
+    # Get available tool names (MCP + extra)
     def get_tool_names(self) -> list[str]:
         if not self.tools_enabled:
             return []
 
-        return [t.name for t in self.mcp_manager.get_langchain_tools()]
+        names = []
+        if self.mcp_manager and self.mcp_manager.is_initialized:
+            names.extend(t.name for t in self.mcp_manager.get_langchain_tools())
+        names.extend(t.name for t in self.extra_tools)
+        return names

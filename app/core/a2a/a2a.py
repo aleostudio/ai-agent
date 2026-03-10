@@ -1,6 +1,5 @@
 import asyncio
 import httpx
-from contextlib import asynccontextmanager
 from starlette.applications import Starlette
 from a2a.server.agent_execution.agent_executor import AgentExecutor
 from a2a.server.agent_execution.context import RequestContext
@@ -8,32 +7,10 @@ from a2a.server.apps.jsonrpc.starlette_app import A2AStarletteApplication
 from a2a.server.events.event_queue import EventQueue
 from a2a.server.request_handlers.default_request_handler import DefaultRequestHandler
 from a2a.server.tasks.inmemory_task_store import InMemoryTaskStore
-from a2a.types import AgentCapabilities, AgentCard, AgentSkill, TaskState, TaskStatus, TaskStatusUpdateEvent
+from a2a.types import AgentCard, TaskState, TaskStatus, TaskStatusUpdateEvent
 from a2a.utils.message import new_agent_text_message
 from app.core.config import settings
 from app.core.logger import logger
-
-
-# Build agent card from settings
-def build_agent_card() -> AgentCard:
-    return AgentCard(
-        name=settings.APP_NAME,
-        description="A general-purpose assistant that answers questions using an LLM.",
-        url=settings.APP_URL,
-        version=settings.APP_VERSION,
-        capabilities=AgentCapabilities(streaming=False, push_notifications=False),
-        default_input_modes=["text/plain"],
-        default_output_modes=["text/plain"],
-        skills=[
-            AgentSkill(
-                id="general-assistant",
-                name="General Knowledge",
-                description="Answers general questions, provides explanations, and helps with non-specialized tasks.",
-                tags=["general", "assistant", "knowledge", "qa"],
-                examples=["Tell me about Python", "What's the weather like?", "Explain quantum computing"],
-            )
-        ],
-    )
 
 
 # A2A AgentExecutor that wraps our SimpleAgent
@@ -42,6 +19,7 @@ class SimpleAgentExecutor(AgentExecutor):
     def __init__(self, agent):
         self.agent = agent
 
+
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
         user_input = context.get_user_input()
         task_id = context.task_id
@@ -49,14 +27,7 @@ class SimpleAgentExecutor(AgentExecutor):
 
         try:
             # Mark task as working
-            await event_queue.enqueue_event(
-                TaskStatusUpdateEvent(
-                    task_id=task_id,
-                    context_id=context_id,
-                    status=TaskStatus(state=TaskState.working),
-                    final=False,
-                )
-            )
+            await event_queue.enqueue_event(TaskStatusUpdateEvent(task_id=task_id, context_id=context_id, status=TaskStatus(state=TaskState.working), final=False))
 
             # Run our agent
             result = await self.agent.async_interact(user_input)
@@ -73,14 +44,7 @@ class SimpleAgentExecutor(AgentExecutor):
                 TaskStatusUpdateEvent(
                     task_id=task_id,
                     context_id=context_id,
-                    status=TaskStatus(
-                        state=TaskState.completed,
-                        message=new_agent_text_message(
-                            text=response_text,
-                            task_id=task_id,
-                            context_id=context_id,
-                        ),
-                    ),
+                    status=TaskStatus(state=TaskState.completed, message=new_agent_text_message(text=response_text, task_id=task_id, context_id=context_id)),
                     final=True,
                 )
             )
@@ -91,27 +55,13 @@ class SimpleAgentExecutor(AgentExecutor):
                 TaskStatusUpdateEvent(
                     task_id=task_id,
                     context_id=context_id,
-                    status=TaskStatus(
-                        state=TaskState.failed,
-                        message=new_agent_text_message(
-                            text=f"Error: {e}",
-                            task_id=task_id,
-                            context_id=context_id,
-                        ),
-                    ),
+                    status=TaskStatus(state=TaskState.failed, message=new_agent_text_message(text=f"Error: {e}", task_id=task_id, context_id=context_id)),
                     final=True,
                 )
             )
 
     async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
-        await event_queue.enqueue_event(
-            TaskStatusUpdateEvent(
-                task_id=context.task_id,
-                context_id=context.context_id,
-                status=TaskStatus(state=TaskState.canceled),
-                final=True,
-            )
-        )
+        await event_queue.enqueue_event(TaskStatusUpdateEvent(task_id=context.task_id, context_id=context.context_id, status=TaskStatus(state=TaskState.canceled), final=True))
 
 
 # Register this agent with the A2A registry
@@ -119,13 +69,9 @@ async def register_with_registry(agent_url: str) -> None:
     await asyncio.sleep(1)
     async with httpx.AsyncClient() as client:
         try:
-            resp = await client.post(
-                f"{settings.REGISTRY_URL}/register",
-                json={"url": agent_url},
-                timeout=settings.REGISTRY_TIMEOUT_S,
-            )
+            resp = await client.post(f"{settings.REGISTRY_URL}/register", json={"url": agent_url}, timeout=settings.REGISTRY_TIMEOUT_S)
             resp.raise_for_status()
-            logger.info("Registered with A2A registry: %s", resp.json())
+            logger.info("A2A client: registered with A2A registry: %s", resp.json())
         except Exception as e:
             logger.warning("Could not register with A2A registry: %s", e)
 
@@ -134,4 +80,5 @@ async def register_with_registry(agent_url: str) -> None:
 def create_a2a_starlette_app(agent_card: AgentCard, agent_executor: AgentExecutor) -> Starlette:
     handler = DefaultRequestHandler(agent_executor=agent_executor, task_store=InMemoryTaskStore())
     a2a_app = A2AStarletteApplication(agent_card=agent_card, http_handler=handler)
+
     return a2a_app.build()
