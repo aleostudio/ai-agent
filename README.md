@@ -11,6 +11,7 @@ This agent will interact with an existing **Ollama** instance or other AI provid
 - [UI for debug](#ui-for-debug)
 - [Tests](#tests)
 - [Debug in VSCode](#debug-in-vscode)
+- [License](#license)
 
 ---
 
@@ -217,6 +218,14 @@ To debug your Python microservice you need to:
 
 - Put some breakpoint in the code, then press the **green play button**
 - Call the API to debug
+
+[↑ index](#index)
+
+---
+
+## License
+
+This project is licensed under the MIT License.
 
 [↑ index](#index)
 

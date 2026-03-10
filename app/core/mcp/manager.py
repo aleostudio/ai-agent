@@ -4,7 +4,7 @@ import logging
 from typing import Any
 from langchain_core.tools import BaseTool, ToolException
 from pydantic import ConfigDict, BaseModel, Field, create_model
-from app.mcp.client import MCPClient, MCPServerConfig
+from app.core.mcp.client import MCPClient, MCPServerConfig
 
 # Global logger
 logger = logging.getLogger(__name__)

@@ -1,7 +1,7 @@
 import os
 import json
 from dotenv import load_dotenv
-from app.mcp.client import MCPServerConfig
+from app.core.mcp.client import MCPServerConfig
 
 # Load env vars from .env file
 load_dotenv()
@@ -24,7 +24,8 @@ class Settings:
     APP_NAME: str = os.getenv("APP_NAME", "Simple AI agent")
     APP_HOST: str = os.getenv("APP_HOST", "0.0.0.0")
     APP_PORT: int = int(os.getenv("APP_PORT", 9201))
-    API_VERSION: str = os.getenv("API_VERSION", "v1")
+    APP_VERSION: str = os.getenv("APP_VERSION", "v1")
+    APP_URL: str = os.getenv("APP_URL", f"http://localhost:{APP_PORT}")
 
     # Logging
     DEBUG: bool = os.getenv("DEBUG", "False").lower() == "true"
@@ -45,6 +46,10 @@ class Settings:
     # MCP config
     MCP_ENABLED: bool = os.getenv("MCP_ENABLED", "False").lower() == "true"
     MCP_TOOL_CALL_MAX_ITERATIONS: int = int(os.getenv("MCP_TOOL_CALL_MAX_ITERATIONS", 10))
+
+    # A2A registry
+    REGISTRY_URL: str = os.getenv("REGISTRY_URL", "http://localhost:9300")
+    REGISTRY_TIMEOUT_S: float = float(os.getenv("REGISTRY_TIMEOUT_S", "4.0"))
 
     def __init__(self):
         self.MCP_SERVERS: list[MCPServerConfig] = _parse_mcp_servers(

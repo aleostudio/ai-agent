@@ -7,12 +7,39 @@ from app.core.config import settings
 from app.core.logger import logger
 from app.agent.simple_agent import SimpleAgent
 from app.model.simple_agent_request import SimpleAgentRequest
-from app.mcp import MCPToolManager
+from app.core.a2a import create_a2a_starlette_app
+from app.core.mcp import MCPToolManager
+from a2a.server.agent_execution.agent_executor import AgentExecutor
+from a2a.server.agent_execution.context import RequestContext
+from a2a.server.events.event_queue import EventQueue
+from a2a.types import AgentCapabilities, AgentCard, AgentSkill
+from a2a.utils.message import new_agent_text_message
 import uvicorn
 
 # Avoid SSL verification
 import truststore
 truststore.inject_into_ssl()
+
+
+# A2A agent card definition
+AGENT_CARD = AgentCard(
+    name="General Assistant",
+    description="A general-purpose assistant that answers questions using an LLM.",
+    url=settings.APP_URL,
+    version=settings.APP_VERSION,
+    capabilities=AgentCapabilities(streaming=False, push_notifications=False),
+    default_input_modes=["text/plain"],
+    default_output_modes=["text/plain"],
+    skills=[
+        AgentSkill(
+            id="general-assistant",
+            name="General Knowledge",
+            description="Answers general questions, provides explanations, and helps with non-specialized tasks.",
+            tags=["general", "assistant", "knowledge", "qa"],
+            examples=["Tell me about Python", "What's the weather like?", "Explain quantum computing"],
+        )
+    ],
+)
 
 
 # Global references
@@ -65,7 +92,7 @@ async def lifespan(app: FastAPI):
 # App init
 app = FastAPI(
     title=settings.APP_NAME,
-    version=settings.API_VERSION,
+    version=settings.APP_VERSION,
     lifespan=lifespan
 )
 
