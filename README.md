@@ -167,7 +167,7 @@ Here you will find:
 
 ### SYSTEM_PROMPT
 
-Standard prompt used for generic questions (like chatbot). It will be used if `MCP_ENABLED` and `A2A_ENABLED` are set to `false`
+Standard prompt used for generic questions (like chatbot). It will be used if `MCP_ENABLED` and `A2A_ENABLED` are set to `false`.
 
 ### SYSTEM_PROMPT_A2A_ORCH
 
@@ -181,13 +181,8 @@ if you want to expose a specific tool through A2A (you will be called by an orch
 
 ### TOOLS_SECTION
 
-Tools definition prompt. It will be used to enforce the tools guidelines, if
-`MCP_ENABLED` or `A2A_ENABLED` are set to `true`.
-
-
-
-- `SYSTEM_PROMPT_A2A_ORCH`: if ``
-- `SYSTEM_PROMPT_TOOLS`: prompt used by LLM if tools calling is enabled
+Appended dynamically to any base prompt when tools are available (MCP or A2A routing).
+Enforces rules to prevent the model from leaking tool names or JSON in responses.
 
 [↑ index](#index)
 

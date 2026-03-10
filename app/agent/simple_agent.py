@@ -77,7 +77,7 @@ class SimpleAgent:
     def _should_continue(self, state: SimpleAgentState) -> Literal["continue", "end"]:
         last_message = state["messages"][-1] if state["messages"] else None
 
-        if state.get("tool_calls_count", 0) >= settings.MCP_TOOL_CALL_MAX_ITERATIONS:
+        if state.get("tool_calls_count", 0) >= settings.TOOL_CALL_MAX_ITERATIONS:
             logger.warning("Max tool call iterations reached")
             return "end"
 
@@ -154,6 +154,8 @@ class SimpleAgent:
                 return self._serialize_result(result)
 
             # Fallback to MCP tools
+            if not self.mcp_manager:
+                raise ValueError(f"Unknown tool: {tool_name}")
             result = await self.mcp_manager.call_tool(tool_name, tool_args)
             logger.info(f"Tool {tool_name} completed")
 
@@ -285,7 +287,7 @@ class SimpleAgent:
     async def _stream_with_tools(self, messages: list) -> AsyncIterator[str]:
         state = {"messages": messages, "tool_calls_count": 0}
         
-        while state["tool_calls_count"] < settings.MCP_TOOL_CALL_MAX_ITERATIONS:
+        while state["tool_calls_count"] < settings.TOOL_CALL_MAX_ITERATIONS:
             response = self.model.invoke(state["messages"])
             state["messages"].append(response)
             

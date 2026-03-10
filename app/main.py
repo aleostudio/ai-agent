@@ -78,7 +78,7 @@ async def lifespan(app: FastAPI):
 
     # Mount A2A sub-application if enabled (both client and orchestrator serve the A2A endpoint)
     if settings.A2A_ENABLED:
-        from app.core.a2a import SimpleAgentExecutor, create_a2a_starlette_app, build_agent_card, register_with_registry
+        from app.core.a2a import SimpleAgentExecutor, create_a2a_starlette_app, register_with_registry
 
         agent_card = build_agent_card()
         agent_executor = SimpleAgentExecutor(simple_agent)
@@ -155,21 +155,18 @@ async def health_check():
     return response
 
 
-# MCP tools list API
+# Tools list API (MCP + A2A routing)
 @app.get("/tools")
 async def list_tools():
-    if not settings.MCP_ENABLED:
-        return {"enabled": False, "tools": []}
+    tools_list = []
 
-    if not mcp_manager or not mcp_manager.is_initialized:
-        return {"enabled": True, "connected": False, "tools": []}
+    if settings.MCP_ENABLED and mcp_manager and mcp_manager.is_initialized:
+        tools_list.extend({"name": t.name, "description": t.description, "source": "mcp"} for t in mcp_manager.get_langchain_tools())
 
-    tools = mcp_manager.get_langchain_tools()
-    return {
-        "enabled": True,
-        "connected": True,
-        "tools": [{"name": t.name, "description": t.description} for t in tools]
-    }
+    if simple_agent:
+        tools_list.extend({"name": t.name, "description": t.description, "source": "a2a"} for t in simple_agent.extra_tools)
+
+    return {"tools": tools_list}
 
 
 # Web UI to test model

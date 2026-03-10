@@ -45,7 +45,9 @@ class Settings:
 
     # MCP config
     MCP_ENABLED: bool = os.getenv("MCP_ENABLED", "False").lower() == "true"
-    MCP_TOOL_CALL_MAX_ITERATIONS: int = int(os.getenv("MCP_TOOL_CALL_MAX_ITERATIONS", 10))
+
+    # Tool calling config (applies to both MCP and A2A routing tools)
+    TOOL_CALL_MAX_ITERATIONS: int = int(os.getenv("TOOL_CALL_MAX_ITERATIONS", os.getenv("MCP_TOOL_CALL_MAX_ITERATIONS", 10)))
 
     # A2A config
     A2A_ENABLED: bool = os.getenv("A2A_ENABLED", "False").lower() == "true"
