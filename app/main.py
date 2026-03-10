@@ -7,39 +7,13 @@ from app.core.config import settings
 from app.core.logger import logger
 from app.agent.simple_agent import SimpleAgent
 from app.model.simple_agent_request import SimpleAgentRequest
-from app.core.a2a import create_a2a_starlette_app
 from app.core.mcp import MCPToolManager
-from a2a.server.agent_execution.agent_executor import AgentExecutor
-from a2a.server.agent_execution.context import RequestContext
-from a2a.server.events.event_queue import EventQueue
-from a2a.types import AgentCapabilities, AgentCard, AgentSkill
-from a2a.utils.message import new_agent_text_message
+import asyncio
 import uvicorn
 
 # Avoid SSL verification
 import truststore
 truststore.inject_into_ssl()
-
-
-# A2A agent card definition
-AGENT_CARD = AgentCard(
-    name="General Assistant",
-    description="A general-purpose assistant that answers questions using an LLM.",
-    url=settings.APP_URL,
-    version=settings.APP_VERSION,
-    capabilities=AgentCapabilities(streaming=False, push_notifications=False),
-    default_input_modes=["text/plain"],
-    default_output_modes=["text/plain"],
-    skills=[
-        AgentSkill(
-            id="general-assistant",
-            name="General Knowledge",
-            description="Answers general questions, provides explanations, and helps with non-specialized tasks.",
-            tags=["general", "assistant", "knowledge", "qa"],
-            examples=["Tell me about Python", "What's the weather like?", "Explain quantum computing"],
-        )
-    ],
-)
 
 
 # Global references
@@ -79,8 +53,27 @@ async def lifespan(app: FastAPI):
     simple_agent = SimpleAgent(model, mcp_manager)
     logger.info("Agent initialized")
 
+    # Mount A2A sub-application if enabled
+    a2a_registration_task = None
+    if settings.A2A_ENABLED:
+        from app.core.a2a import SimpleAgentExecutor, create_a2a_starlette_app, build_agent_card, register_with_registry
+
+        agent_card = build_agent_card()
+        agent_executor = SimpleAgentExecutor(simple_agent)
+        a2a_app = create_a2a_starlette_app(agent_card, agent_executor)
+        app.mount("", a2a_app)
+        a2a_registration_task = asyncio.create_task(register_with_registry(settings.APP_URL))
+        logger.info(f"A2A enabled, registering on {settings.REGISTRY_URL}")
+    else:
+        logger.info("A2A disabled")
+
     # Pause: here we are handling HTTP requests, waiting for shutdown
     yield
+
+    # Cancel A2A registration task if still running
+    if a2a_registration_task:
+        a2a_registration_task.cancel()
+        await asyncio.gather(a2a_registration_task, return_exceptions=True)
 
     # Shutdown
     logger.info("Shutting down application")
@@ -98,7 +91,7 @@ app = FastAPI(
 
 
 # Interact API
-@app.post("/interact")
+@app.post("/interact", responses={503: {"description": "Agent not initialized"}, 500: {"description": "Internal server error"}})
 async def interact(request: SimpleAgentRequest):
     if not simple_agent:
         raise HTTPException(status_code=503, detail="Agent not initialized")
@@ -111,7 +104,7 @@ async def interact(request: SimpleAgentRequest):
         # Sync modes
         response_type = "ai_message" if settings.RESPONSE_TYPE == "full" else "generated_text"
         response = await simple_agent.async_interact(request.prompt)
-        
+
         return {"response": response["agent_response"][response_type]}
 
     except Exception as e:
@@ -128,15 +121,24 @@ async def health_check():
             "connected": mcp_manager.connected_servers,
             "tools_count": len(mcp_manager.get_langchain_tools()) if mcp_manager.is_initialized else 0
         }
-    
+
+    a2a_status = None
+    if settings.A2A_ENABLED:
+        a2a_status = {
+            "registry": settings.REGISTRY_URL,
+        }
+
     response = {
         "status": "ok",
         "message": "Service is running",
     }
-    
+
     if mcp_status:
         response["mcp"] = mcp_status
-    
+
+    if a2a_status:
+        response["a2a"] = a2a_status
+
     return response
 
 
@@ -145,7 +147,7 @@ async def health_check():
 async def list_tools():
     if not settings.MCP_ENABLED:
         return {"enabled": False, "tools": []}
-    
+
     if not mcp_manager or not mcp_manager.is_initialized:
         return {"enabled": True, "connected": False, "tools": []}
 

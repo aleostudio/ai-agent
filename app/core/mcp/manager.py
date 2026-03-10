@@ -98,8 +98,8 @@ class MCPToolManager:
                 client = MCPClient(config)
                 await client.connect()
                 self.clients[config.name] = client
-            except Exception as e:
-                logger.error(f"Failed to connect to '{config.name}': {e}")
+            except Exception:
+                logger.warning(f"Skipping MCP server '{config.name}', will continue without it")
 
         self._build_langchain_tools()
         self._initialized = True

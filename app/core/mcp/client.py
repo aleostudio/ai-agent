@@ -73,7 +73,9 @@ class MCPClient:
 
         except Exception as e:
             self._connected = False
-            logger.error(f"[{self.name}] Connection failed: {e}")
+            endpoint = self.config.url if self.config.transport == "sse" else f"{self.config.command} {' '.join(self.config.args)}"
+            root_cause = e.__cause__ or (e.exceptions[0] if hasattr(e, 'exceptions') and e.exceptions else e)
+            logger.error(f"[{self.name}] Connection failed to {endpoint}: {root_cause}")
             raise
 
 

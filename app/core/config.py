@@ -47,7 +47,8 @@ class Settings:
     MCP_ENABLED: bool = os.getenv("MCP_ENABLED", "False").lower() == "true"
     MCP_TOOL_CALL_MAX_ITERATIONS: int = int(os.getenv("MCP_TOOL_CALL_MAX_ITERATIONS", 10))
 
-    # A2A registry
+    # A2A config
+    A2A_ENABLED: bool = os.getenv("A2A_ENABLED", "False").lower() == "true"
     REGISTRY_URL: str = os.getenv("REGISTRY_URL", "http://localhost:9300")
     REGISTRY_TIMEOUT_S: float = float(os.getenv("REGISTRY_TIMEOUT_S", "4.0"))
 
