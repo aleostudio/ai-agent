@@ -1,14 +1,17 @@
-.PHONY: help setup dev test clean
+.PHONY: help setup scaffold dev test clean
 
 help: ## Show help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 setup: ## Setup: create venv and install deps
-	uv venv
+	uv venv --python 3.13
 	uv sync
 	@echo ""
 	@echo "Setup complete!"
+
+scaffold: ## Create a new agent from this boilerplate
+	python scripts/create_agent.py
 
 dev: ## Start agent
 	uv sync

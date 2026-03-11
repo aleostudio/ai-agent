@@ -36,14 +36,33 @@ from pathlib import Path
 # Config
 # ==============================================================================
 
-agent_name           = "New agent"
-agent_description    = "A general-purpose assistant that answers questions using an LLM."
-agent_port           = 9501
-a2a_card_id          = "general-assistant"
-a2a_card_name        = "General Knowledge"
-a2a_card_description = "Answers general questions, provides explanations, and helps with non-specialized tasks."
-a2a_card_tags        = ["general", "assistant", "knowledge", "qa"]
-a2a_card_examples    = ["Tell me about Python", "What's the weather like?", "Explain quantum computing"]
+def _env_str(name: str, default: str) -> str:
+    return os.getenv(name, default)
+
+
+def _env_int(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return int(value)
+
+
+def _env_csv(name: str, default: list[str]) -> list[str]:
+    value = os.getenv(name)
+    if not value:
+        return default
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+agent_name           = _env_str("AGENT_NAME", "New agent")
+agent_description    = _env_str("AGENT_DESCRIPTION", "A general-purpose assistant that answers questions using an LLM.")
+agent_port           = _env_int("AGENT_PORT", 9501)
+a2a_card_id          = _env_str("A2A_CARD_ID", "general-assistant")
+a2a_card_name        = _env_str("A2A_CARD_NAME", "General Knowledge")
+a2a_card_description = _env_str("A2A_CARD_DESCRIPTION", "Answers general questions, provides explanations, and helps with non-specialized tasks.")
+a2a_card_tags        = _env_csv("A2A_CARD_TAGS", ["general", "assistant", "knowledge", "qa"])
+a2a_card_examples    = _env_csv("A2A_CARD_EXAMPLES", ["Tell me about Python", "What's the weather like?", "Explain quantum computing"])
+target_base_dir      = os.getenv("CREATE_AGENT_TARGET_BASE_DIR")
 
 # ==============================================================================
 # DO NOT EDIT BELOW
@@ -150,7 +169,8 @@ def main() -> None:
 
     # Paths
     src_dir = Path(__file__).resolve().parent.parent
-    dst_dir = src_dir.parent / slug
+    dst_parent = Path(target_base_dir).resolve() if target_base_dir else src_dir.parent
+    dst_dir = dst_parent / slug
     if dst_dir.exists():
         print(f"Target folder already exists: {dst_dir}")
         return
@@ -172,7 +192,7 @@ def main() -> None:
 
     # Done
     print()
-    print(f'Agent "{display}" created in ../{slug}/')
+    print(f'Agent "{display}" created in {dst_dir}/')
     print(f"Port: {port_str}")
     print()
     print(f"cd ../{slug} && make setup && make dev")

@@ -18,7 +18,7 @@ This agent will interact with an existing **Ollama** instance or other AI provid
 
 ## Prerequisites
 
-- Python >= 3.12
+- Python >= 3.13 (recommended: 3.13)
 - [uv](https://docs.astral.sh/uv/getting-started/installation) and [pip](https://pip.pypa.io/en/stable/installation) installed
 
 [↑ index](#index)
@@ -30,7 +30,7 @@ This agent will interact with an existing **Ollama** instance or other AI provid
 Init **virtualenv** and install dependencies with:
 
 ```bash
-uv venv
+uv venv --python 3.13
 source .venv/bin/activate
 uv sync
 ```
@@ -88,6 +88,12 @@ To clone this boilerplate into a new agent folder with renamed classes/files and
 
 ```bash
 python scripts/create_agent.py
+```
+
+or with Makefile:
+
+```bash
+make scaffold
 ```
 
 Before running it, edit the variables at the top of:
