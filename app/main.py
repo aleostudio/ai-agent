@@ -6,11 +6,11 @@ import truststore
 import uvicorn
 from app.a2a_card import build_agent_card
 from app.agent.agent import Agent
-from app.api.routes import router as api_router
-from app.core.config import settings
+from app.api import router as api_router
+from app.config import settings
 from app.core.logger import logger
 from app.core.mcp import MCPToolManager
-from app.runtime import AppRuntime
+from app.core.runtime import AppRuntime
 
 
 # Use system trust store certificates
@@ -22,12 +22,13 @@ if not settings.HTTP_API_ENABLED and not settings.A2A_ENABLED:
     raise RuntimeError("HTTP_API_ENABLED=False requires A2A_ENABLED=True")
 
 
+# Build and manage application startup/shutdown lifecycle
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     runtime = AppRuntime()
     app.state.runtime = runtime
 
-    logger.info("Starting agent")
+    logger.info("Starting %s", settings.APP_NAME)
 
     model = init_chat_model(
         settings.MODEL,
@@ -108,6 +109,7 @@ async def lifespan(app: FastAPI):
     logger.info("Shutdown complete")
 
 
+# FastAPI app instance
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
@@ -118,9 +120,11 @@ app = FastAPI(
 )
 
 
+# Load routes if enabled
 if settings.HTTP_API_ENABLED:
     app.include_router(api_router)
 
 
+# App launch if invoked directly
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host=settings.APP_HOST, port=settings.APP_PORT, log_level="warning")

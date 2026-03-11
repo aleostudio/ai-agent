@@ -4,7 +4,7 @@ import httpx
 from langchain_core.tools import BaseTool
 from a2a.client import A2ACardResolver, A2AClient
 from a2a.types import (MessageSendParams, Message, TextPart, SendMessageRequest, SendMessageSuccessResponse, Task)
-from app.core.config import settings
+from app.config import settings
 from app.core.logger import logger
 
 

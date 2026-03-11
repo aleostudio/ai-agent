@@ -22,7 +22,7 @@
 #                                                   #
 # Usage:                                            #
 # 1. Edit the variables below                       #
-# 2. python create_agent.py                         #
+# 2. python scripts/create_agent.py                 #
 # 3. cd ../<agent-slug> && make setup && make dev   #
 #                                                   #
 #####################################################
@@ -32,9 +32,9 @@ import re
 import shutil
 from pathlib import Path
 
-# =============================================================================
+# ==============================================================================
 # Config
-# =============================================================================
+# ==============================================================================
 
 agent_name           = "New agent"
 agent_description    = "A general-purpose assistant that answers questions using an LLM."
@@ -45,7 +45,9 @@ a2a_card_description = "Answers general questions, provides explanations, and he
 a2a_card_tags        = ["general", "assistant", "knowledge", "qa"]
 a2a_card_examples    = ["Tell me about Python", "What's the weather like?", "Explain quantum computing"]
 
-# =============================================================================
+# ==============================================================================
+# DO NOT EDIT BELOW
+# ==============================================================================
 
 # Update strings like 'Math Specialist' -> 'math-specialist'
 def to_slug(name: str) -> str:
@@ -95,7 +97,7 @@ def write_a2a_card(path: Path, display: str, description: str, card_id: str, car
     tags_str = ", ".join(f'"{t}"' for t in card_tags)
     examples_str = ", ".join(f'"{e}"' for e in card_examples)
     content = f'''from a2a.types import AgentCapabilities, AgentCard, AgentSkill
-from app.core.config import settings
+from app.config import settings
 
 
 # Build agent card from settings
@@ -147,7 +149,7 @@ def main() -> None:
     port_str = str(agent_port)
 
     # Paths
-    src_dir = Path(__file__).resolve().parent
+    src_dir = Path(__file__).resolve().parent.parent
     dst_dir = src_dir.parent / slug
     if dst_dir.exists():
         print(f"Target folder already exists: {dst_dir}")
@@ -198,7 +200,6 @@ def copy_tree(src_dir: Path, dst_dir: Path) -> None:
 def rename_files(dst_dir: Path, snake: str) -> None:
     file_renames = [
         (Path("app/agent/agent.py"), Path(f"app/agent/{snake}.py")),
-        (Path("app/model/agent_request.py"), Path(f"app/model/{snake}_request.py")),
         (Path("app/agent/agent_state.py"), Path(f"app/agent/{snake}_state.py")),
     ]
     for old_rel, new_rel in file_renames:
@@ -216,12 +217,10 @@ def replace_contents(dst_dir: Path, snake: str, camel: str, display: str, slug: 
         ("AgentRequest", f"{camel}Request"),
         ("class Agent:", f"class {camel}:"),
         ("from app.agent.agent import Agent", f"from app.agent.{snake} import {camel}"),
-        ("from app.model.agent_request import AgentRequest", f"from app.model.{snake}_request import {camel}Request"),
         ("from app.agent.agent_state import AgentState", f"from app.agent.{snake}_state import {camel}State"),
         ("from app.core.a2a import AgentA2AExecutor", f"from app.core.a2a import {camel}A2AExecutor"),
         ("agent_executor = AgentA2AExecutor(", f"agent_executor = {camel}A2AExecutor("),
         ("agent_state", f"{snake}_state"),
-        ("agent_request", f"{snake}_request"),
         ("AI agent", display),
         ('"ai-agent"', f'"{slug}"'),
         ("container_name: ai-agent", f"container_name: {slug}"),

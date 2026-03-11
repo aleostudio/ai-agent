@@ -6,6 +6,7 @@ This agent will interact with an existing **Ollama** instance or other AI provid
 
 - [Prerequisites](#prerequisites)
 - [Configuration](#configuration)
+- [Scaffold new agent](#scaffold-new-agent)
 - [Run service](#run-service)
 - [Customize system prompt](#customize-system-prompt)
 - [UI for debug](#ui-for-debug)
@@ -76,6 +77,24 @@ HTTP_API_ENABLED=false
 ```
 
 > `HTTP_API_ENABLED=false` requires `A2A_ENABLED=true`.
+
+[↑ index](#index)
+
+---
+
+## Scaffold new agent
+
+To clone this boilerplate into a new agent folder with renamed classes/files and updated port/card metadata:
+
+```bash
+python scripts/create_agent.py
+```
+
+Before running it, edit the variables at the top of:
+
+```bash
+scripts/create_agent.py
+```
 
 [↑ index](#index)
 

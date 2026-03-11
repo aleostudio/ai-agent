@@ -2,9 +2,9 @@ from pathlib import Path
 from pydantic import BaseModel, Field, field_validator
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
-from app.core.config import ResponseType, settings
+from app.config import ResponseType, settings
 from app.core.logger import logger
-from app.runtime import AppRuntime
+from app.core.runtime import AppRuntime
 
 router = APIRouter()
 
@@ -81,6 +81,7 @@ async def health_check(http_request: Request):
 
     if mcp_status:
         response["mcp"] = mcp_status
+
     if a2a_status:
         response["a2a"] = a2a_status
 
@@ -111,6 +112,6 @@ async def list_tools(http_request: Request):
 # Serve the local debug UI page
 @router.get("/ui", response_class=HTMLResponse)
 def ui() -> HTMLResponse:
-    ui_path = Path(__file__).resolve().parents[2] / "ui" / "index.html"
+    ui_path = Path(__file__).resolve().parents[1] / "ui" / "index.html"
 
     return HTMLResponse(ui_path.read_text(encoding="utf-8"))

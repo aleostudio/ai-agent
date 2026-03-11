@@ -1,5 +1,5 @@
 from a2a.types import AgentCapabilities, AgentCard, AgentSkill
-from app.core.config import settings
+from app.config import settings
 
 
 # Build agent card from settings

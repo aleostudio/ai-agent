@@ -9,7 +9,7 @@ from a2a.server.request_handlers.default_request_handler import DefaultRequestHa
 from a2a.server.tasks.inmemory_task_store import InMemoryTaskStore
 from a2a.types import AgentCard, TaskState, TaskStatus, TaskStatusUpdateEvent
 from a2a.utils.message import new_agent_text_message
-from app.core.config import settings
+from app.config import settings
 from app.core.logger import logger
 
 

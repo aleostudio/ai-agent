@@ -6,7 +6,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
 from langgraph.graph import END, StateGraph
 from app.core.tool_runtime import AgentToolRuntime
-from app.core.config import settings
+from app.config import settings
 from app.core.logger import logger
 from app.agent.agent_state import AgentState
 import app.prompts as prompts
