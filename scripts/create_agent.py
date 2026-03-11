@@ -217,6 +217,8 @@ def replace_contents(dst_dir: Path, snake: str, camel: str, display: str, slug: 
         ("AgentRequest", f"{camel}Request"),
         ("class Agent:", f"class {camel}:"),
         ("from app.agent.agent import Agent", f"from app.agent.{snake} import {camel}"),
+        ("agent: Agent | None = None", f"agent: {camel} | None = None"),
+        ("runtime.agent = Agent(", f"runtime.agent = {camel}("),
         ("from app.agent.agent_state import AgentState", f"from app.agent.{snake}_state import {camel}State"),
         ("from app.core.a2a import AgentA2AExecutor", f"from app.core.a2a import {camel}A2AExecutor"),
         ("agent_executor = AgentA2AExecutor(", f"agent_executor = {camel}A2AExecutor("),
