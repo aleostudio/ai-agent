@@ -1,6 +1,6 @@
 import pytest
 from pydantic import ValidationError
-from app.model.agent_request import AgentRequest
+from app.api import AgentRequest
 
 
 def test_prompt_is_trimmed():
