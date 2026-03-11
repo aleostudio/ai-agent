@@ -9,6 +9,7 @@ from app.agent.agent import Agent
 from app.api import router as api_router
 from app.config import settings
 from app.core.logger import logger
+from app.core.banner import print_banner
 from app.core.mcp import MCPToolManager
 from app.core.runtime import AppRuntime
 
@@ -28,20 +29,7 @@ async def lifespan(app: FastAPI):
     runtime = AppRuntime()
     app.state.runtime = runtime
 
-    logger.info("###################################################")
-    logger.info("#            _____                          _     #")
-    logger.info("#      /\\   |_   _|                        | |    #")
-    logger.info("#     /  \\    | |     __ _  __ _  ___ _ __ | |_   #")
-    logger.info("#    / /\\ \\   | |    / _` |/ _` |/ _ \\ '_ \\| __|  #")
-    logger.info("#   / ____ \\ _| |_  | (_| | (_| |  __/ | | | |_   #")
-    logger.info("#  /_/    \\_\\_____|  \\__,_|\\__, |\\___|_| |_|\\__|  #")
-    logger.info("#                           __/ |                 #")
-    logger.info("#                          |___/                  #")
-    logger.info("#                                                 #")
-    logger.info("#      alessandro.orru <at> aleostudio.com        #")
-    logger.info("#                                                 #")
-    logger.info("###################################################")
-    logger.info("")
+    print_banner()
     logger.info("Starting %s", settings.APP_NAME)
 
     model = init_chat_model(
