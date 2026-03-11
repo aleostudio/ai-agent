@@ -2,8 +2,9 @@ from typing import TypedDict, Optional, Annotated
 from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
 from langgraph.graph.message import add_messages
 
+
 # Agent state with tools calling support
-class SimpleAgentState(TypedDict):
+class AgentState(TypedDict):
 
     # User input
     prompt: str

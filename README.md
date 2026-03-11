@@ -1,6 +1,6 @@
-# Simple AI agent with MCP/A2A client
+# AI agent with MCP/A2A client
 
-This agent will interact with an existing **Ollama** instance or other AI providers as a chatbot and it has built-in **MCP** and **A2A clients** to connect to remote MCP servers or A2A registry to use their **tools**.
+This agent will interact with an existing **Ollama** instance or other AI providers as a chatbot and it has built-in **MCP** and **A2A clients** (as orchestrator or simple client) to connect to remote MCP servers or A2A registry to use their **tools**.
 
 ## Index
 
@@ -67,6 +67,15 @@ If you want to **stream** the agent response, change this variable in:
 ```bash
 RESPONSE_TYPE="stream"
 ```
+
+If you want to run in **pure A2A mode** (without FastAPI HTTP APIs like `/interact`, `/tools`, `/ui`, `/`), set:
+
+```bash
+A2A_ENABLED=true
+HTTP_API_ENABLED=false
+```
+
+> `HTTP_API_ENABLED=false` requires `A2A_ENABLED=true`.
 
 [↑ index](#index)
 
@@ -156,6 +165,8 @@ The response will be something like this payload:
 ```
 
 [↑ index](#index)
+
+> If `HTTP_API_ENABLED=false`, these HTTP endpoints are disabled and only the A2A server is exposed.
 
 ---
 

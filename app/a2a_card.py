@@ -5,7 +5,7 @@ from app.core.config import settings
 # Build agent card from settings
 def build_agent_card() -> AgentCard:
     return AgentCard(
-        name="Simple AI agent",
+        name="AI agent",
         description="A general-purpose assistant that answers questions using an LLM.",
         url=settings.APP_URL,
         version=settings.APP_VERSION,

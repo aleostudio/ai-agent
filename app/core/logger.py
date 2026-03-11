@@ -2,6 +2,7 @@ import logging
 import sys
 from app.core.config import settings
 
+
 # MCP disconnection errors filter
 class MCPDisconnectFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
@@ -12,6 +13,7 @@ class MCPDisconnectFilter(logging.Filter):
             return False
         if "incomplete chunked read" in msg:
             return False
+
         return True
 
 

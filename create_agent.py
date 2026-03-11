@@ -126,7 +126,7 @@ def build_agent_card() -> AgentCard:
 def create_env_file(env_dist_path: Path, env_path: Path, display: str, port: int) -> None:
     content = env_dist_path.read_text(encoding="utf-8")
     patches = {
-        'APP_NAME="Simple AI agent"': f'APP_NAME="{display}"',
+        'APP_NAME="AI agent"': f'APP_NAME="{display}"',
         "APP_PORT=9201": f"APP_PORT={port}",
         "APP_URL=http://localhost:9201": f"APP_URL=http://localhost:{port}",
     }
@@ -194,12 +194,12 @@ def copy_tree(src_dir: Path, dst_dir: Path) -> None:
     shutil.copytree(src_dir, dst_dir, ignore=ignore)
 
 
-# Rename files with "simple_agent" in the name
+# Rename files with "agent" in the name
 def rename_files(dst_dir: Path, snake: str) -> None:
     file_renames = [
-        (Path("app/agent/simple_agent.py"), Path(f"app/agent/{snake}.py")),
-        (Path("app/model/simple_agent_request.py"), Path(f"app/model/{snake}_request.py")),
-        (Path("app/model/simple_agent_state.py"), Path(f"app/model/{snake}_state.py")),
+        (Path("app/agent/agent.py"), Path(f"app/agent/{snake}.py")),
+        (Path("app/model/agent_request.py"), Path(f"app/model/{snake}_request.py")),
+        (Path("app/agent/agent_state.py"), Path(f"app/agent/{snake}_state.py")),
     ]
     for old_rel, new_rel in file_renames:
         old_path = dst_dir / old_rel
@@ -211,14 +211,18 @@ def rename_files(dst_dir: Path, snake: str) -> None:
 # Content replacements (order matters: specific first)
 def replace_contents(dst_dir: Path, snake: str, camel: str, display: str, slug: str, port_str: str) -> None:
     replacements = [
-        ("SimpleAgentExecutor", f"{camel}Executor"),
-        ("SimpleAgentState", f"{camel}State"),
-        ("SimpleAgentRequest", f"{camel}Request"),
-        ("SimpleAgent", camel),
-        ("simple_agent_state", f"{snake}_state"),
-        ("simple_agent_request", f"{snake}_request"),
-        ("simple_agent", snake),
-        ("Simple AI agent", display),
+        ("AgentA2AExecutor", f"{camel}A2AExecutor"),
+        ("AgentState", f"{camel}State"),
+        ("AgentRequest", f"{camel}Request"),
+        ("class Agent:", f"class {camel}:"),
+        ("from app.agent.agent import Agent", f"from app.agent.{snake} import {camel}"),
+        ("from app.model.agent_request import AgentRequest", f"from app.model.{snake}_request import {camel}Request"),
+        ("from app.agent.agent_state import AgentState", f"from app.agent.{snake}_state import {camel}State"),
+        ("from app.core.a2a import AgentA2AExecutor", f"from app.core.a2a import {camel}A2AExecutor"),
+        ("agent_executor = AgentA2AExecutor(", f"agent_executor = {camel}A2AExecutor("),
+        ("agent_state", f"{snake}_state"),
+        ("agent_request", f"{snake}_request"),
+        ("AI agent", display),
         ('"ai-agent"', f'"{slug}"'),
         ("container_name: ai-agent", f"container_name: {slug}"),
         ("9201", port_str),

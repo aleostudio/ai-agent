@@ -1,7 +1,7 @@
 import asyncio
 import httpx
 from starlette.applications import Starlette
-from a2a.server.agent_execution.agent_executor import AgentExecutor
+from a2a.server.agent_execution.agent_executor import AgentExecutor as BaseA2AExecutor
 from a2a.server.agent_execution.context import RequestContext
 from a2a.server.apps.jsonrpc.starlette_app import A2AStarletteApplication
 from a2a.server.events.event_queue import EventQueue
@@ -13,8 +13,8 @@ from app.core.config import settings
 from app.core.logger import logger
 
 
-# A2A AgentExecutor that wraps our SimpleAgent
-class SimpleAgentExecutor(AgentExecutor):
+# A2A executor that wraps our local Agent runtime.
+class AgentA2AExecutor(BaseA2AExecutor):
 
     def __init__(self, agent):
         self.agent = agent
@@ -76,8 +76,8 @@ async def register_with_registry(agent_url: str) -> None:
             logger.warning("Could not register with A2A registry: %s", e)
 
 
-# Build the A2A Starlette sub-application
-def create_a2a_starlette_app(agent_card: AgentCard, agent_executor: AgentExecutor) -> Starlette:
+# Build the A2A Starlette sub-application.
+def create_a2a_starlette_app(agent_card: AgentCard, agent_executor: BaseA2AExecutor) -> Starlette:
     handler = DefaultRequestHandler(agent_executor=agent_executor, task_store=InMemoryTaskStore())
     a2a_app = A2AStarletteApplication(agent_card=agent_card, http_handler=handler)
 
