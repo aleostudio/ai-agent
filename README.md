@@ -20,6 +20,7 @@ This agent will interact with an existing **Ollama** instance or other AI provid
 
 - Python >= 3.13 (recommended: 3.13)
 - [uv](https://docs.astral.sh/uv/getting-started/installation) and [pip](https://pip.pypa.io/en/stable/installation) installed
+- [A2A registry](https://github.com/aleostudio/a2a-registry) if A2A is enabled
 
 [↑ index](#index)
 
@@ -43,6 +44,14 @@ cp env.dist .env
 
 Then, customize it if needed (e.g. **model**, **temperature** and so on).
 
+If you want to **stream** the agent response (like a chatbot), change this variable in:
+
+```bash
+RESPONSE_TYPE="stream"
+```
+
+### MCP
+
 If you want to **enable MCP support**, update these env vars with your URL (`MCP_SERVERS` is in JSON array format; you can add several servers):
 
 ```bash
@@ -50,7 +59,9 @@ MCP_ENABLED=True
 MCP_SERVERS='[{"name": "mcp-server", "transport": "sse", "url": "http://localhost:8000/sse"}]'
 ```
 
-If you want to **enable A2A support**, set these variables:
+### A2A
+
+If you want to **enable A2A support**, ensure you have [A2A registry](https://github.com/aleostudio/a2a-registry) up and running and then set these variables:
 
 ```bash
 A2A_ENABLED=true
@@ -58,16 +69,17 @@ A2A_ROLE=orchestrator
 REGISTRY_URL=http://localhost:9300
 ```
 
+Registry self-healing polling (enabled by default) checks every 60 seconds if the agent is still present in the registry and re-registers automatically if missing:
+
+```bash
+REGISTRY_POLL_ENABLED=true
+REGISTRY_POLL_INTERVAL_S=60.0
+```
+
 Pay attention that `orchestrator` will use **other A2A agents** discovered by A2A registry. If you set `client` as role, this agent will work as a specific A2A agent, called by another A2A orchestrator.
 
 > **NOTE**:
 > to work properly, tool calling needs a fairly intelligent model, so consider using at least a **8b model** or more.
-
-If you want to **stream** the agent response, change this variable in:
-
-```bash
-RESPONSE_TYPE="stream"
-```
 
 If you want to run in **pure A2A mode** (without FastAPI HTTP APIs like `/interact`, `/tools`, `/ui`, `/`), set:
 

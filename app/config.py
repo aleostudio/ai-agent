@@ -77,6 +77,8 @@ class Settings:
     A2A_ROLE: A2ARole = A2ARole(os.getenv("A2A_ROLE", "client").lower())
     REGISTRY_URL: str = os.getenv("REGISTRY_URL", "http://localhost:9300")
     REGISTRY_TIMEOUT_S: float = float(os.getenv("REGISTRY_TIMEOUT_S", "4.0"))
+    REGISTRY_POLL_ENABLED: bool = _get_bool("REGISTRY_POLL_ENABLED", True)
+    REGISTRY_POLL_INTERVAL_S: float = float(os.getenv("REGISTRY_POLL_INTERVAL_S", "60.0"))
 
     def __init__(self):
         self.MCP_SERVERS: list[MCPServerConfig] = _parse_mcp_servers(

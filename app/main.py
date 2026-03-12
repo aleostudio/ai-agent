@@ -83,13 +83,13 @@ async def lifespan(app: FastAPI):
         runtime.agent = Agent(model, runtime.mcp_manager)
 
     if settings.A2A_ENABLED:
-        from app.core.a2a import AgentA2AExecutor, create_a2a_starlette_app, register_with_registry
+        from app.core.a2a import AgentA2AExecutor, create_a2a_starlette_app, registration_poll_loop
 
         agent_card = build_agent_card()
         agent_executor = AgentA2AExecutor(runtime.agent)
         a2a_app = create_a2a_starlette_app(agent_card, agent_executor)
         app.mount("", a2a_app)
-        runtime.a2a_registration_task = asyncio.create_task(register_with_registry(settings.APP_URL))
+        runtime.a2a_registration_task = asyncio.create_task(registration_poll_loop(settings.APP_URL))
         logger.info("A2A enabled (%s), registering on %s", settings.A2A_ROLE, settings.REGISTRY_URL)
     else:
         logger.info("A2A disabled")

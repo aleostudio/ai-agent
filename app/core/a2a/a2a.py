@@ -64,9 +64,19 @@ class AgentA2AExecutor(BaseA2AExecutor):
         await event_queue.enqueue_event(TaskStatusUpdateEvent(task_id=context.task_id, context_id=context.context_id, status=TaskStatus(state=TaskState.canceled), final=True))
 
 
+# Check whether the current agent URL is already present in registry.
+async def is_registered_in_registry(agent_url: str) -> bool:
+    normalized = agent_url.rstrip("/")
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(f"{settings.REGISTRY_URL}/agents", timeout=settings.REGISTRY_TIMEOUT_S)
+        resp.raise_for_status()
+        agents = resp.json()
+
+        return any(a.get("url", "").rstrip("/") == normalized for a in agents)
+
+
 # Register this agent with the A2A registry
 async def register_with_registry(agent_url: str) -> None:
-    await asyncio.sleep(1)
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.post(f"{settings.REGISTRY_URL}/register", json={"url": agent_url}, timeout=settings.REGISTRY_TIMEOUT_S)
@@ -74,6 +84,29 @@ async def register_with_registry(agent_url: str) -> None:
             logger.info("A2A client: registered with A2A registry: %s", resp.json())
         except Exception as e:
             logger.warning("Could not register with A2A registry: %s", e)
+
+
+# Keep registration alive by periodically checking registry and re-registering if missing.
+async def registration_poll_loop(agent_url: str) -> None:
+    if not settings.REGISTRY_POLL_ENABLED:
+        logger.info("A2A registry polling disabled")
+        return
+
+    interval = max(settings.REGISTRY_POLL_INTERVAL_S, 5.0)
+    logger.info("A2A registry polling enabled: every %ss", interval)
+
+    while True:
+        try:
+            registered = await is_registered_in_registry(agent_url)
+            if not registered:
+                logger.warning("Agent missing from registry, attempting re-registration")
+                await register_with_registry(agent_url)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.warning("A2A registry poll failed: %s", e)
+
+        await asyncio.sleep(interval)
 
 
 # Build the A2A Starlette sub-application.
