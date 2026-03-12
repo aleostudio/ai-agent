@@ -137,6 +137,8 @@ Before running it, edit the variables at the top of:
 scripts/create_agent.py
 ```
 
+`scripts/create_agent.py` supports batch scaffolding via `AGENT_CONFIGS` (array of config objects).
+
 [↑ index](#index)
 
 ---

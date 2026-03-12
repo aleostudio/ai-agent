@@ -31,38 +31,38 @@ import os
 import re
 import shutil
 from pathlib import Path
+from dataclasses import dataclass
 
 # ==============================================================================
-# Config
-# ==============================================================================
-
-def _env_str(name: str, default: str) -> str:
-    return os.getenv(name, default)
-
-
-def _env_int(name: str, default: int) -> int:
-    value = os.getenv(name)
-    if value is None:
-        return default
-    return int(value)
+@dataclass
+class AgentConfig:
+    agent_name: str
+    agent_description: str
+    agent_port: int
+    a2a_card_id: str
+    a2a_card_name: str
+    a2a_card_description: str
+    a2a_card_tags: list[str]
+    a2a_card_examples: list[str]
 
 
-def _env_csv(name: str, default: list[str]) -> list[str]:
-    value = os.getenv(name)
-    if not value:
-        return default
-    return [item.strip() for item in value.split(",") if item.strip()]
+# Multi-agent scaffold config: add as many agents as needed.
+AGENT_CONFIGS: list[AgentConfig] = [
+    AgentConfig(
+        agent_name="New agent",
+        agent_description="A general-purpose assistant that answers questions using an LLM.",
+        agent_port=9501,
+        a2a_card_id="general-assistant",
+        a2a_card_name="General Knowledge",
+        a2a_card_description="Answers general questions, provides explanations, and helps with non-specialized tasks.",
+        a2a_card_tags=["general", "assistant", "knowledge", "qa"],
+        a2a_card_examples=["Tell me about Python", "What's the weather like?", "Explain quantum computing"],
+    )
+]
 
 
-agent_name           = _env_str("AGENT_NAME", "New agent")
-agent_description    = _env_str("AGENT_DESCRIPTION", "A general-purpose assistant that answers questions using an LLM.")
-agent_port           = _env_int("AGENT_PORT", 9501)
-a2a_card_id          = _env_str("A2A_CARD_ID", "general-assistant")
-a2a_card_name        = _env_str("A2A_CARD_NAME", "General Knowledge")
-a2a_card_description = _env_str("A2A_CARD_DESCRIPTION", "Answers general questions, provides explanations, and helps with non-specialized tasks.")
-a2a_card_tags        = _env_csv("A2A_CARD_TAGS", ["general", "assistant", "knowledge", "qa"])
-a2a_card_examples    = _env_csv("A2A_CARD_EXAMPLES", ["Tell me about Python", "What's the weather like?", "Explain quantum computing"])
-target_base_dir      = os.getenv("CREATE_AGENT_TARGET_BASE_DIR")
+def _load_agent_configs() -> list[AgentConfig]:
+    return AGENT_CONFIGS
 
 # ==============================================================================
 # DO NOT EDIT BELOW
@@ -158,24 +158,24 @@ def create_env_file(env_dist_path: Path, env_path: Path, display: str, port: int
 
 
 # Main
-def main() -> None:
-
+def create_single_agent(config: AgentConfig) -> bool:
     # Derive names
-    display = agent_name.strip()
+    display = config.agent_name.strip()
     slug = to_slug(display)
     snake = to_snake(display)
     camel = to_camel(display)
-    port_str = str(agent_port)
+    port_str = str(config.agent_port)
 
     # Paths
     src_dir = Path(__file__).resolve().parent.parent
-    dst_parent = Path(target_base_dir).resolve() if target_base_dir else src_dir.parent
-    dst_dir = dst_parent / slug
+    dst_dir = src_dir.parent / slug
     if dst_dir.exists():
         print(f"Target folder already exists: {dst_dir}")
-        return
+        return False
 
+    print("=====================================")
     print(f'Creating agent "{display}" ...')
+    print("=====================================")
     print(f"Slug:  {slug}")
     print(f"Snake: {snake}")
     print(f"Camel: {camel}")
@@ -187,8 +187,8 @@ def main() -> None:
 
     rename_files(dst_dir, snake)
     replace_contents(dst_dir, snake, camel, display, slug, port_str)
-    rewrite_a2a_card(dst_dir)
-    generate_env(dst_dir, display)
+    rewrite_a2a_card(dst_dir, config)
+    generate_env(dst_dir, display, config.agent_port)
 
     # Done
     print()
@@ -197,6 +197,22 @@ def main() -> None:
     print()
     print(f"cd ../{slug} && make setup && make dev")
     print()
+    print()
+    return True
+
+
+def main() -> None:
+    configs = _load_agent_configs()
+    if not configs:
+        print("No agent configs provided. Nothing to do.")
+        return
+
+    created = 0
+    for config in configs:
+        if create_single_agent(config):
+            created += 1
+
+    print(f"Scaffold completed: created {created}/{len(configs)} agent(s)")
 
 
 # Copy tree (exclude hidden dirs, __pycache__, this script, uv.lock)
@@ -255,25 +271,25 @@ def replace_contents(dst_dir: Path, snake: str, camel: str, display: str, slug: 
 
 
 # Rewrite a2a_card.py
-def rewrite_a2a_card(dst_dir: Path) -> None:
+def rewrite_a2a_card(dst_dir: Path, config: AgentConfig) -> None:
     write_a2a_card(
         dst_dir / "app" / "a2a_card.py",
-        display=agent_name.strip(),
-        description=agent_description,
-        card_id=a2a_card_id,
-        card_name=a2a_card_name,
-        card_description=a2a_card_description,
-        card_tags=a2a_card_tags,
-        card_examples=a2a_card_examples,
+        display=config.agent_name.strip(),
+        description=config.agent_description,
+        card_id=config.a2a_card_id,
+        card_name=config.a2a_card_name,
+        card_description=config.a2a_card_description,
+        card_tags=config.a2a_card_tags,
+        card_examples=config.a2a_card_examples,
     )
     print("Wrote a2a_card.py")
 
 
 # Create .env from env.dist
-def generate_env(dst_dir: Path, display: str) -> None:
+def generate_env(dst_dir: Path, display: str, port: int) -> None:
     env_dist = dst_dir / "env.dist"
     if env_dist.exists():
-        create_env_file(env_dist, dst_dir / ".env", display, agent_port)
+        create_env_file(env_dist, dst_dir / ".env", display, port)
         print("Created .env from env.dist")
 
 
