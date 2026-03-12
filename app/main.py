@@ -158,9 +158,7 @@ async def lifespan(app: FastAPI):
     await _initialize_agent(runtime, model)
     _initialize_a2a(runtime, app)
 
-    logger.info("===================================")
     logger.info("%s initialized", settings.APP_NAME)
-    logger.info("===================================")
     yield
 
     logger.info("Shutting down application")

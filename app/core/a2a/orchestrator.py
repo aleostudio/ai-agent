@@ -7,6 +7,8 @@ from a2a.types import (MessageSendParams, Message, TextPart, SendMessageRequest,
 from app.config import settings
 from app.core.logger import logger
 
+_last_registry_counts: tuple[int, int] | None = None
+
 
 # Convert agent name to a valid LangChain tool name (alphanumeric + underscores)
 def _sanitize_tool_name(name: str) -> str:
@@ -46,6 +48,7 @@ def _extract_text_from_result(result) -> str:
 
 # Fetch registered agents from the A2A registry, excluding self
 async def fetch_agents_from_registry() -> list[dict]:
+    global _last_registry_counts
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.get(f"{settings.REGISTRY_URL}/agents", timeout=settings.REGISTRY_TIMEOUT_S)
@@ -56,7 +59,10 @@ async def fetch_agents_from_registry() -> list[dict]:
             self_url = settings.APP_URL.rstrip("/")
             remote = [a for a in agents if a.get("url", "").rstrip("/") != self_url]
 
-            logger.info(f"A2A registry returned {len(agents)} agent(s), {len(remote)} remote")
+            counts = (len(agents), len(remote))
+            if _last_registry_counts is None or counts != _last_registry_counts:
+                logger.info("A2A registry returned %s agent(s), %s remote", counts[0], counts[1])
+                _last_registry_counts = counts
             return remote
 
         except Exception as e:
