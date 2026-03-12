@@ -31,20 +31,11 @@ import os
 import re
 import shutil
 from pathlib import Path
-from dataclasses import dataclass
+from models import AgentConfig, SourceLayout
 
 # ==============================================================================
-@dataclass
-class AgentConfig:
-    agent_name: str
-    agent_description: str
-    agent_port: int
-    a2a_card_id: str
-    a2a_card_name: str
-    a2a_card_description: str
-    a2a_card_tags: list[str]
-    a2a_card_examples: list[str]
-
+# Config
+# ==============================================================================
 
 # Multi-agent scaffold config: add as many agents as needed.
 AGENT_CONFIGS: list[AgentConfig] = [
@@ -60,13 +51,94 @@ AGENT_CONFIGS: list[AgentConfig] = [
     )
 ]
 
+# ==============================================================================
+# DO NOT EDIT BELOW
+# ==============================================================================
+
 
 def _load_agent_configs() -> list[AgentConfig]:
     return AGENT_CONFIGS
 
-# ==============================================================================
-# DO NOT EDIT BELOW
-# ==============================================================================
+
+# Read UTF-8 text content from file
+def _read_text(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
+# Extract first regex group with fallback default
+def _extract(pattern: str, text: str, default: str, flags: int = 0) -> str:
+    match = re.search(pattern, text, flags)
+    return match.group(1) if match else default
+
+
+# Read an env key value from env-like text content
+def _extract_env_value(content: str, key: str, default: str) -> str:
+    pattern = rf"(?m)^{re.escape(key)}=(.*)$"
+    match = re.search(pattern, content)
+    if not match:
+        return default
+    return match.group(1).strip().strip('"').strip("'")
+
+
+# Discover source project naming/layout to build dynamic replacements
+def discover_source_layout(src_dir: Path) -> SourceLayout:
+    main_text = _read_text(src_dir / "app" / "main.py")
+    agent_import = re.search(r"from app\.agent\.(\w+) import (\w+)", main_text)
+    if not agent_import:
+        raise RuntimeError("Could not detect agent import in app/main.py")
+
+    agent_module = agent_import.group(1)
+    agent_class = agent_import.group(2)
+
+    agent_file = src_dir / "app" / "agent" / f"{agent_module}.py"
+    if not agent_file.exists():
+        raise RuntimeError(f"Agent file not found: {agent_file}")
+
+    agent_text = _read_text(agent_file)
+    state_import = re.search(r"from app\.agent\.(\w+) import (\w+State)\b", agent_text)
+    if state_import:
+        state_module = state_import.group(1)
+        state_class = state_import.group(2)
+    else:
+        state_module = "agent_state"
+        state_class = "AgentState"
+
+    api_text = _read_text(src_dir / "app" / "api.py")
+    request_class = _extract(r"class\s+([a-zA-Z0-9_]+Request)\(", api_text, "AgentRequest")
+
+    a2a_text = _read_text(src_dir / "app" / "core" / "a2a" / "a2a.py")
+    a2a_executor_class = _extract(r"class\s+([a-zA-Z0-9_]+A2AExecutor)\(", a2a_text, "AgentA2AExecutor")
+
+    config_text = _read_text(src_dir / "app" / "config.py")
+    app_name_default = _extract(r'APP_NAME:\s*str\s*=\s*os\.getenv\("APP_NAME",\s*"([^"]+)"\)', config_text, "AI agent")
+
+    env_dist_path = src_dir / "env.dist"
+    env_dist_text = _read_text(env_dist_path) if env_dist_path.exists() else ""
+    app_port = _extract_env_value(env_dist_text, "APP_PORT", "9201")
+    app_url = _extract_env_value(env_dist_text, "APP_URL", f"http://localhost:{app_port}")
+
+    pyproject_path = src_dir / "pyproject.toml"
+    pyproject_text = _read_text(pyproject_path) if pyproject_path.exists() else ""
+    package_name = _extract(r'(?m)^name\s*=\s*"([^"]+)"\s*$', pyproject_text, "ai-agent")
+
+    compose_path = src_dir / "docker-compose.yml"
+    compose_text = _read_text(compose_path) if compose_path.exists() else ""
+    container_name = _extract(r"(?m)^\s*container_name:\s*([^\s]+)\s*$", compose_text, "ai-agent")
+
+    return SourceLayout(
+        agent_module=agent_module,
+        agent_class=agent_class,
+        state_module=state_module,
+        state_class=state_class,
+        request_class=request_class,
+        a2a_executor_class=a2a_executor_class,
+        app_name_default=app_name_default,
+        app_port=app_port,
+        app_url=app_url,
+        package_name=package_name,
+        container_name=container_name,
+    )
+
 
 # Update strings like 'Math Specialist' -> 'math-specialist'
 def to_slug(name: str) -> str:
@@ -144,21 +216,26 @@ def build_agent_card() -> AgentCard:
 
 
 # Env generator
+# Set or append a single env key-value pair in env-like text
+def _set_env_key(content: str, key: str, value: str) -> str:
+    line = f"{key}={value}"
+    pattern = rf"(?m)^{re.escape(key)}=.*$"
+    if re.search(pattern, content):
+        return re.sub(pattern, line, content, count=1)
+    return content.rstrip() + f"\n{line}\n"
+
+
 def create_env_file(env_dist_path: Path, env_path: Path, display: str, port: int) -> None:
     content = env_dist_path.read_text(encoding="utf-8")
-    patches = {
-        'APP_NAME="AI agent"': f'APP_NAME="{display}"',
-        "APP_PORT=9201": f"APP_PORT={port}",
-        "APP_URL=http://localhost:9201": f"APP_URL=http://localhost:{port}",
-    }
-    for old, new in patches.items():
-        content = content.replace(old, new)
+    content = _set_env_key(content, "APP_NAME", f'"{display}"')
+    content = _set_env_key(content, "APP_PORT", str(port))
+    content = _set_env_key(content, "APP_URL", f"http://localhost:{port}")
 
     env_path.write_text(content, encoding="utf-8")
 
 
 # Main
-def create_single_agent(config: AgentConfig) -> bool:
+def create_single_agent(src_dir: Path, source: SourceLayout, config: AgentConfig) -> bool:
     # Derive names
     display = config.agent_name.strip()
     slug = to_slug(display)
@@ -167,7 +244,6 @@ def create_single_agent(config: AgentConfig) -> bool:
     port_str = str(config.agent_port)
 
     # Paths
-    src_dir = Path(__file__).resolve().parent.parent
     dst_dir = src_dir.parent / slug
     if dst_dir.exists():
         print(f"Target folder already exists: {dst_dir}")
@@ -185,8 +261,8 @@ def create_single_agent(config: AgentConfig) -> bool:
     copy_tree(src_dir, dst_dir)
     print(f"Copied to {dst_dir}")
 
-    rename_files(dst_dir, snake)
-    replace_contents(dst_dir, snake, camel, display, slug, port_str)
+    rename_files(dst_dir, source, snake)
+    replace_contents(dst_dir, source, snake, camel, display, slug, port_str)
     rewrite_a2a_card(dst_dir, config)
     generate_env(dst_dir, display, config.agent_port)
 
@@ -202,6 +278,8 @@ def create_single_agent(config: AgentConfig) -> bool:
 
 
 def main() -> None:
+    src_dir = Path(__file__).resolve().parent.parent
+    source = discover_source_layout(src_dir)
     configs = _load_agent_configs()
     if not configs:
         print("No agent configs provided. Nothing to do.")
@@ -209,7 +287,7 @@ def main() -> None:
 
     created = 0
     for config in configs:
-        if create_single_agent(config):
+        if create_single_agent(src_dir, source, config):
             created += 1
 
     print(f"Scaffold completed: created {created}/{len(configs)} agent(s)")
@@ -231,11 +309,11 @@ def copy_tree(src_dir: Path, dst_dir: Path) -> None:
     shutil.copytree(src_dir, dst_dir, ignore=ignore)
 
 
-# Rename files with "agent" in the name
-def rename_files(dst_dir: Path, snake: str) -> None:
+# Rename current agent files to the new agent names
+def rename_files(dst_dir: Path, source: SourceLayout, snake: str) -> None:
     file_renames = [
-        (Path("app/agent/agent.py"), Path(f"app/agent/{snake}.py")),
-        (Path("app/agent/agent_state.py"), Path(f"app/agent/{snake}_state.py")),
+        (Path(f"app/agent/{source.agent_module}.py"), Path(f"app/agent/{snake}.py")),
+        (Path(f"app/agent/{source.state_module}.py"), Path(f"app/agent/{snake}_state.py")),
     ]
     for old_rel, new_rel in file_renames:
         old_path = dst_dir / old_rel
@@ -245,25 +323,28 @@ def rename_files(dst_dir: Path, snake: str) -> None:
 
 
 # Content replacements (order matters: specific first)
-def replace_contents(dst_dir: Path, snake: str, camel: str, display: str, slug: str, port_str: str) -> None:
-    replacements = [
-        ("AgentA2AExecutor", f"{camel}A2AExecutor"),
-        ("AgentState", f"{camel}State"),
-        ("AgentRequest", f"{camel}Request"),
-        ("class Agent:", f"class {camel}:"),
-        ("from app.agent.agent import Agent", f"from app.agent.{snake} import {camel}"),
-        ("agent: Agent | None = None", f"agent: {camel} | None = None"),
-        ("runtime.agent = Agent(", f"runtime.agent = {camel}("),
-        ("return Agent(", f"return {camel}("),
-        ("from app.agent.agent_state import AgentState", f"from app.agent.{snake}_state import {camel}State"),
-        ("from app.core.a2a import AgentA2AExecutor", f"from app.core.a2a import {camel}A2AExecutor"),
-        ("agent_executor = AgentA2AExecutor(", f"agent_executor = {camel}A2AExecutor("),
-        ("agent_state", f"{snake}_state"),
-        ("AI agent", display),
-        ('"ai-agent"', f'"{slug}"'),
-        ("container_name: ai-agent", f"container_name: {slug}"),
-        ("9201", port_str),
+def replace_contents(dst_dir: Path, source: SourceLayout, snake: str, camel: str, display: str, slug: str, port_str: str) -> None:
+    replacements: list[tuple[str, str]] = [
+        (source.a2a_executor_class, f"{camel}A2AExecutor"),
+        (source.state_class, f"{camel}State"),
+        (source.request_class, f"{camel}Request"),
+        (f"class {source.agent_class}:", f"class {camel}:"),
+        (f"from app.agent.{source.agent_module} import {source.agent_class}", f"from app.agent.{snake} import {camel}"),
+        (f"agent: {source.agent_class} | None = None", f"agent: {camel} | None = None"),
+        (f"agent: Optional[{source.agent_class}] = None", f"agent: Optional[{camel}] = None"),
+        (f"runtime.agent = {source.agent_class}(", f"runtime.agent = {camel}("),
+        (f"return {source.agent_class}(", f"return {camel}("),
+        (f"from app.agent.{source.state_module} import {source.state_class}", f"from app.agent.{snake}_state import {camel}State"),
+        (f"from app.core.a2a import {source.a2a_executor_class}", f"from app.core.a2a import {camel}A2AExecutor"),
+        (f"agent_executor = {source.a2a_executor_class}(", f"agent_executor = {camel}A2AExecutor("),
+        (source.state_module, f"{snake}_state"),
+        (source.app_name_default, display),
+        (f'"{source.package_name}"', f'"{slug}"'),
+        (f"container_name: {source.container_name}", f"container_name: {slug}"),
+        (source.app_url, f"http://localhost:{port_str}"),
+        (source.app_port, port_str),
     ]
+    replacements = [(old, new) for old, new in replacements if old and old != new]
 
     count = sum(1 for p in dst_dir.rglob("*") if p.is_file() and is_text_file(p) and (replace_in_file(p, replacements) or True))
     print(f"Processed {count} text files")
