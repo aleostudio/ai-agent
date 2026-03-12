@@ -3,7 +3,14 @@ from app.core.a2a import a2a
 
 
 def test_registration_poll_loop_disabled(monkeypatch):
+    monkeypatch.setattr(a2a.settings, "A2A_REGISTER_ENABLED", True)
     monkeypatch.setattr(a2a.settings, "REGISTRY_POLL_ENABLED", False)
+    asyncio.run(a2a.registration_poll_loop("http://localhost:9501"))
+
+
+def test_registration_poll_loop_registration_disabled(monkeypatch):
+    monkeypatch.setattr(a2a.settings, "A2A_REGISTER_ENABLED", False)
+    monkeypatch.setattr(a2a.settings, "REGISTRY_POLL_ENABLED", True)
     asyncio.run(a2a.registration_poll_loop("http://localhost:9501"))
 
 
@@ -19,6 +26,7 @@ def test_registration_poll_loop_reregisters_when_missing(monkeypatch):
         called["register"] += 1
         raise asyncio.CancelledError
 
+    monkeypatch.setattr(a2a.settings, "A2A_REGISTER_ENABLED", True)
     monkeypatch.setattr(a2a.settings, "REGISTRY_POLL_ENABLED", True)
     monkeypatch.setattr(a2a.settings, "REGISTRY_POLL_INTERVAL_S", 60.0)
     monkeypatch.setattr(a2a, "is_registered_in_registry", fake_is_registered)

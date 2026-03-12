@@ -12,6 +12,7 @@ router = APIRouter()
 # Request validation
 class AgentRequest(BaseModel):
     prompt: str = Field(..., min_length=1, description="User prompt")
+    session_id: str | None = Field(default=None, description="Optional session id for memory")
 
     @field_validator("prompt")
     @classmethod
@@ -42,9 +43,9 @@ async def interact(request: AgentRequest, http_request: Request):
 
     try:
         if settings.RESPONSE_TYPE == ResponseType.STREAM:
-            return StreamingResponse(runtime.agent.stream_interact(request.prompt), media_type="text/event-stream")
+            return StreamingResponse(runtime.agent.stream_interact(request.prompt, session_id=request.session_id), media_type="text/event-stream")
         response_type = "ai_message" if settings.RESPONSE_TYPE == ResponseType.FULL else "generated_text"
-        response = await runtime.agent.async_interact(request.prompt)
+        response = await runtime.agent.async_interact(request.prompt, session_id=request.session_id)
 
         return {
             "response": response["agent_response"][response_type]

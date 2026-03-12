@@ -17,20 +17,24 @@ from app.core.logger import logger
 class AgentA2AExecutor(BaseA2AExecutor):
 
     def __init__(self, agent):
-        self.agent = agent
+        self._agent_provider = agent if callable(agent) else (lambda: agent)
 
 
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
         user_input = context.get_user_input()
         task_id = context.task_id
         context_id = context.context_id
+        agent = self._agent_provider()
 
         try:
+            if not agent:
+                raise RuntimeError("Agent not initialized")
+
             # Mark task as working
             await event_queue.enqueue_event(TaskStatusUpdateEvent(task_id=task_id, context_id=context_id, status=TaskStatus(state=TaskState.working), final=False))
 
             # Run our agent
-            result = await self.agent.async_interact(user_input)
+            result = await agent.async_interact(user_input, session_id=context_id)
             response_text = result["agent_response"].get("generated_text") or ""
 
             # If generated_text is empty, try extracting from ai_message
@@ -88,6 +92,10 @@ async def register_with_registry(agent_url: str) -> None:
 
 # Keep registration alive by periodically checking registry and re-registering if missing.
 async def registration_poll_loop(agent_url: str) -> None:
+    if not settings.A2A_REGISTER_ENABLED:
+        logger.info("A2A registry registration disabled")
+        return
+
     if not settings.REGISTRY_POLL_ENABLED:
         logger.info("A2A registry polling disabled")
         return

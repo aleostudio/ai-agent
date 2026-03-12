@@ -1,8 +1,10 @@
 import json
 import re
+import time
+import asyncio
 from typing import AsyncIterator, Callable, Literal
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, BaseMessage
 from langchain_core.tools import BaseTool
 from langgraph.graph import END, StateGraph
 from app.core.tool_runtime import AgentToolRuntime
@@ -30,6 +32,12 @@ class Agent:
         self.model = self.tool_runtime.bind_model(model) if self.tools_enabled else model
         self.workflow = self._build_workflow(workflow_customizer)
         self.graph = self.workflow.compile()
+        self.memory_enabled = settings.MEMORY_ENABLED
+        self._memory_ttl_s = max(settings.MEMORY_TTL_S, 1.0)
+        self._memory_max_sessions = max(settings.MEMORY_MAX_SESSIONS, 1)
+        self._memory_max_messages = max(settings.MEMORY_MAX_MESSAGES, 1)
+        self._session_store: dict[str, tuple[float, list[BaseMessage]]] = {}
+        self._session_lock = asyncio.Lock()
 
 
     # Expose extra tools for API/introspection consumers
@@ -112,10 +120,10 @@ class Agent:
 
 
     # Build the initial graph state for a new interaction
-    def _initial_state(self, prompt: str) -> dict:
+    def _initial_state(self, prompt: str, messages: list[BaseMessage] | None = None) -> dict:
         return {
             "prompt": prompt,
-            "messages": [],
+            "messages": messages or [],
             "ai_message": None,
             "generated_text": None,
             "tool_calls_count": 0,
@@ -129,35 +137,42 @@ class Agent:
 
 
     # Run an asynchronous graph interaction
-    async def async_interact(self, prompt: str) -> dict:
-        output = await self.graph.ainvoke(self._initial_state(prompt))
+    async def async_interact(self, prompt: str, session_id: str | None = None) -> dict:
+        messages = await self._build_messages_for_prompt(prompt, session_id)
+        output = await self.graph.ainvoke(self._initial_state(prompt, messages=messages))
+        await self._save_session_history(session_id, output.get("messages", []))
         return {"agent_response": output}
 
 
     # Stream interaction output, with or without tool execution loop
-    async def stream_interact(self, prompt: str) -> AsyncIterator[str]:
-        messages = [SystemMessage(content=self.system_prompt), HumanMessage(content=prompt)]
+    async def stream_interact(self, prompt: str, session_id: str | None = None) -> AsyncIterator[str]:
+        messages = await self._build_messages_for_prompt(prompt, session_id)
 
         if self.tools_enabled:
-            async for chunk in self._stream_with_tools(messages):
+            async for chunk in self._stream_with_tools(messages, session_id=session_id):
                 yield chunk
         else:
-            async for chunk in self._stream_direct(messages):
+            async for chunk in self._stream_direct(messages, session_id=session_id):
                 yield chunk
 
 
     # Stream direct model output when no tool loop is needed
-    async def _stream_direct(self, messages: list) -> AsyncIterator[str]:
+    async def _stream_direct(self, messages: list, session_id: str | None = None) -> AsyncIterator[str]:
+        full_text = ""
         async for chunk in self.base_model.astream(messages):
             text = self._content_to_text(chunk.content)
             if text:
+                full_text += text
                 payload = {"choices": [{"delta": {"content": text}, "index": 0}]}
                 yield f"data: {json.dumps(payload)}\n\n"
+        if full_text:
+            messages.append(AIMessage(content=full_text))
+        await self._save_session_history(session_id, messages)
         yield "data: [DONE]\n\n"
 
 
     # Stream output while iterating model/tool steps until completion
-    async def _stream_with_tools(self, messages: list) -> AsyncIterator[str]:
+    async def _stream_with_tools(self, messages: list, session_id: str | None = None) -> AsyncIterator[str]:
         state = {"messages": messages, "tool_calls_count": 0}
 
         while state["tool_calls_count"] < settings.TOOL_CALL_MAX_ITERATIONS:
@@ -170,6 +185,7 @@ class Agent:
                     final_text = self._clean_tool_leaks(final_text)
                     payload = {"choices": [{"delta": {"content": final_text}, "index": 0}]}
                     yield f"data: {json.dumps(payload)}\n\n"
+                await self._save_session_history(session_id, state["messages"])
                 yield "data: [DONE]\n\n"
                 return
 
@@ -177,6 +193,7 @@ class Agent:
             state["messages"].extend(tool_messages)
             state["tool_calls_count"] += 1
 
+        await self._save_session_history(session_id, state["messages"])
         yield "data: [MAX_ITERATIONS]\n\n"
 
 
@@ -223,3 +240,49 @@ class Agent:
             logger.debug("Cleaned tool leak from model response")
 
         return cleaned
+
+
+    # Build initial message list from optional session history and current user input.
+    async def _build_messages_for_prompt(self, prompt: str, session_id: str | None) -> list[BaseMessage]:
+        history = await self._load_session_history(session_id)
+        return [SystemMessage(content=self.system_prompt), *history, HumanMessage(content=prompt)]
+
+
+    # Load and prune session history using TTL and max sessions constraints.
+    async def _load_session_history(self, session_id: str | None) -> list[BaseMessage]:
+        if not self.memory_enabled or not session_id:
+            return []
+
+        async with self._session_lock:
+            self._prune_sessions_locked()
+            existing = self._session_store.get(session_id)
+            if not existing:
+                return []
+
+            _, messages = existing
+            self._session_store[session_id] = (time.time(), messages)
+            return list(messages)
+
+
+    # Persist session history while limiting growth.
+    async def _save_session_history(self, session_id: str | None, messages: list[BaseMessage]) -> None:
+        if not self.memory_enabled or not session_id:
+            return
+
+        filtered = [m for m in messages if not isinstance(m, SystemMessage)]
+        trimmed = filtered[-self._memory_max_messages:]
+
+        async with self._session_lock:
+            self._prune_sessions_locked()
+            self._session_store[session_id] = (time.time(), trimmed)
+            if len(self._session_store) > self._memory_max_sessions:
+                oldest_key = min(self._session_store.items(), key=lambda item: item[1][0])[0]
+                self._session_store.pop(oldest_key, None)
+
+
+    # Drop expired sessions by TTL.
+    def _prune_sessions_locked(self) -> None:
+        now = time.time()
+        expired = [sid for sid, (ts, _) in self._session_store.items() if now - ts > self._memory_ttl_s]
+        for sid in expired:
+            self._session_store.pop(sid, None)

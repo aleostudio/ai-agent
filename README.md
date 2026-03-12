@@ -66,6 +66,7 @@ If you want to **enable A2A support**, ensure you have [A2A registry](https://gi
 ```bash
 A2A_ENABLED=true
 A2A_ROLE=orchestrator
+A2A_REGISTER_ENABLED=true
 REGISTRY_URL=http://localhost:9300
 ```
 
@@ -74,6 +75,15 @@ Registry self-healing polling (enabled by default) checks every 60 seconds if th
 ```bash
 REGISTRY_POLL_ENABLED=true
 REGISTRY_POLL_INTERVAL_S=60.0
+```
+
+Set `A2A_REGISTER_ENABLED=false` if you want to expose A2A endpoints without self-registration to the registry.
+
+If running as orchestrator, you can also refresh the remote routing table periodically:
+
+```bash
+ORCHESTRATOR_REFRESH_ENABLED=true
+ORCHESTRATOR_REFRESH_INTERVAL_S=60.0
 ```
 
 Pay attention that `orchestrator` will use **other A2A agents** discovered by A2A registry. If you set `client` as role, this agent will work as a specific A2A agent, called by another A2A orchestrator.
@@ -89,6 +99,19 @@ HTTP_API_ENABLED=false
 ```
 
 > `HTTP_API_ENABLED=false` requires `A2A_ENABLED=true`.
+
+### Session memory
+
+Optional in-memory conversation memory with TTL:
+
+```bash
+MEMORY_ENABLED=true
+MEMORY_TTL_S=1800.0
+MEMORY_MAX_SESSIONS=100
+MEMORY_MAX_MESSAGES=50
+```
+
+When enabled, send an optional `session_id` in `/interact` payload to keep context across requests.
 
 [↑ index](#index)
 
@@ -157,7 +180,18 @@ You can start the conversation with this simple payload:
 curl -XPOST "http://localhost:9201/interact" \
 --header "Content-Type: application/json" \
 --data '{
-    "prompt": "Hi! Who are you?"
+    "prompt": "Hi! Who are you?",
+}'
+```
+
+If you have enabled memory, add `session_id` to the payload in each interact:
+
+```bash
+curl -XPOST "http://localhost:9201/interact" \
+--header "Content-Type: application/json" \
+--data '{
+    "prompt": "Hi! Who are you?",
+    "session_id": "your-session-id"
 }'
 ```
 

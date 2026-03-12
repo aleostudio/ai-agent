@@ -8,4 +8,6 @@ from app.core.mcp import MCPToolManager
 class AppRuntime:
     agent: Agent | None = None
     mcp_manager: MCPToolManager | None = None
-    a2a_registration_task: asyncio.Task | None = None
+    a2a_registry_poll_task: asyncio.Task | None = None
+    orchestrator_refresh_task: asyncio.Task | None = None
+    orchestrator_agents_signature: str = ""

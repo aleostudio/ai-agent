@@ -69,16 +69,25 @@ class Settings:
     # Tool calling config (applies to both MCP and A2A routing tools)
     TOOL_CALL_MAX_ITERATIONS: int = int(os.getenv("TOOL_CALL_MAX_ITERATIONS", os.getenv("MCP_TOOL_CALL_MAX_ITERATIONS", 10)))
 
+    # Session memory config
+    MEMORY_ENABLED: bool = _get_bool("MEMORY_ENABLED", False)
+    MEMORY_TTL_S: float = float(os.getenv("MEMORY_TTL_S", "1800.0"))
+    MEMORY_MAX_SESSIONS: int = int(os.getenv("MEMORY_MAX_SESSIONS", "500"))
+    MEMORY_MAX_MESSAGES: int = int(os.getenv("MEMORY_MAX_MESSAGES", "50"))
+
     # HTTP API config
     HTTP_API_ENABLED: bool = _get_bool("HTTP_API_ENABLED", True)
 
     # A2A config
     A2A_ENABLED: bool = _get_bool("A2A_ENABLED", False)
     A2A_ROLE: A2ARole = A2ARole(os.getenv("A2A_ROLE", "client").lower())
+    A2A_REGISTER_ENABLED: bool = _get_bool("A2A_REGISTER_ENABLED", True)
     REGISTRY_URL: str = os.getenv("REGISTRY_URL", "http://localhost:9300")
     REGISTRY_TIMEOUT_S: float = float(os.getenv("REGISTRY_TIMEOUT_S", "4.0"))
     REGISTRY_POLL_ENABLED: bool = _get_bool("REGISTRY_POLL_ENABLED", True)
     REGISTRY_POLL_INTERVAL_S: float = float(os.getenv("REGISTRY_POLL_INTERVAL_S", "60.0"))
+    ORCHESTRATOR_REFRESH_ENABLED: bool = _get_bool("ORCHESTRATOR_REFRESH_ENABLED", True)
+    ORCHESTRATOR_REFRESH_INTERVAL_S: float = float(os.getenv("ORCHESTRATOR_REFRESH_INTERVAL_S", "60.0"))
 
     def __init__(self):
         self.MCP_SERVERS: list[MCPServerConfig] = _parse_mcp_servers(
