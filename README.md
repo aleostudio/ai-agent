@@ -252,16 +252,17 @@ If you want to test the agent through an UI, there is a built-in ChatGPT-like UI
 
 ## Tests
 
-Ensure you have ```pytest``` installed, otherwise:
+Install dev dependencies:
 
 ```bash
-uv pip install pytest
+uv sync --extra dev
 ```
 
-Then, launch tests with:
+Then run tests and lint:
 
 ```bash
-pytest tests/
+uv run pytest -q
+uv run ruff check .
 ```
 
 [↑ index](#index)

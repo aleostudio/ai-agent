@@ -18,7 +18,8 @@ dev: ## Start agent
 	uv run uvicorn app.main:app --host 0.0.0.0 --port 9201
 
 test: ## Run tests
-	uv run --extra dev pytest tests/ -v
+	uv sync --extra dev
+	uv run pytest tests/ -v
 
 clean: ## Clean caches
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
