@@ -24,11 +24,18 @@ if not settings.HTTP_API_ENABLED and not settings.A2A_ENABLED:
 
 
 # Build orchestrator agent instance and signature from current registry state
-async def _build_orchestrator_agent(model, mcp_manager):
+def _compute_orchestrator_signature(remote_agents: list[dict]) -> str:
+    return "|".join(sorted(f"{a.get('url', '')}::{a.get('card', {}).get('name', '')}" for a in remote_agents))
+
+
+# Build orchestrator agent instance and signature from current registry state
+async def _build_orchestrator_agent(model, mcp_manager, remote_agents: list[dict] | None = None):
     from app.core.a2a.orchestrator import build_orchestrator_tools, fetch_agents_from_registry
     import app.prompts as prompts
 
-    remote_agents = await fetch_agents_from_registry()
+    if remote_agents is None:
+        remote_agents = await fetch_agents_from_registry()
+
     if not remote_agents:
         return Agent(model, mcp_manager), ""
 
@@ -40,7 +47,7 @@ async def _build_orchestrator_agent(model, mcp_manager):
         }
         for a in remote_agents
     ]
-    signature = "|".join(sorted(f"{a.get('url', '')}::{a.get('card', {}).get('name', '')}" for a in remote_agents))
+    signature = _compute_orchestrator_signature(remote_agents)
     system_prompt = prompts.build_system_prompt(
         "a2a_orchestrator",
         tool_names=[t.name for t in extra_tools],
@@ -56,16 +63,23 @@ async def _orchestrator_refresh_loop(runtime: AppRuntime, model) -> None:
         logger.info("Orchestrator refresh loop disabled")
         return
 
+    from app.core.a2a.orchestrator import fetch_agents_from_registry
+
     interval = max(settings.ORCHESTRATOR_REFRESH_INTERVAL_S, 10.0)
     logger.info("Orchestrator refresh loop enabled: every %ss", interval)
 
     while True:
         try:
-            refreshed_agent, signature = await _build_orchestrator_agent(model, runtime.mcp_manager)
-            if signature != runtime.orchestrator_agents_signature:
-                runtime.agent = refreshed_agent
-                runtime.orchestrator_agents_signature = signature
-                logger.info("Orchestrator routing table refreshed")
+            remote_agents = await fetch_agents_from_registry()
+            signature = _compute_orchestrator_signature(remote_agents)
+            if signature == runtime.orchestrator_agents_signature:
+                await asyncio.sleep(interval)
+                continue
+
+            refreshed_agent, _ = await _build_orchestrator_agent(model, runtime.mcp_manager, remote_agents=remote_agents)
+            runtime.agent = refreshed_agent
+            runtime.orchestrator_agents_signature = signature
+            logger.info("Orchestrator routing table refreshed")
         except asyncio.CancelledError:
             raise
         except Exception as e:
