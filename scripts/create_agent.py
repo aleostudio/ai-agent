@@ -215,9 +215,8 @@ def main() -> None:
     print(f"Scaffold completed: created {created}/{len(configs)} agent(s)")
 
 
-# Copy tree (exclude hidden dirs, __pycache__, this script, uv.lock)
+# Copy tree (exclude hidden dirs, __pycache__, uv.lock)
 def copy_tree(src_dir: Path, dst_dir: Path) -> None:
-    script_name = Path(__file__).name
     keep_hidden = {".gitignore", ".dockerignore"}
 
     def ignore(directory: str, entries: list[str]) -> set[str]:
@@ -226,7 +225,7 @@ def copy_tree(src_dir: Path, dst_dir: Path) -> None:
             e for e in entries
             if (e.startswith(".") and e not in keep_hidden)
             or e == "__pycache__"
-            or (is_root and e in {script_name, "uv.lock"})
+            or (is_root and e in {"uv.lock"})
         }
 
     shutil.copytree(src_dir, dst_dir, ignore=ignore)
